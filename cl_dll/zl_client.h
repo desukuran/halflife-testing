@@ -15,6 +15,11 @@
 
 #include "zl_shared.h"
 
+// MSVC's math.h only defines M_PI with _USE_MATH_DEFINES
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 struct cl_entity_s;
 struct ref_params_s;
 struct usercmd_s;
