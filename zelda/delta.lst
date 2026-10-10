@@ -61,7 +61,7 @@ clientdata_t none
 	DEFINE_DELTA( vuser4[2], DT_SIGNED | DT_FLOAT, 10, 1.0 ),
 	
 	DEFINE_DELTA( fuser1, DT_SIGNED | DT_FLOAT, 22, 128.0 ),
-	DEFINE_DELTA( fuser2, DT_SIGNED | DT_FLOAT, 10, 128.0 ),
+	DEFINE_DELTA( fuser2, DT_SIGNED | DT_FLOAT, 16, 128.0 ),	// Zelda: footstep phase 0..29 (PMZ_Footsteps)
 	DEFINE_DELTA( fuser3, DT_SIGNED | DT_FLOAT, 10, 128.0 ),
 	// Zelda 64 port: Link's predicted state (pm_shared/zl_shared.h)
 	//   fuser1 facing yaw, fuser4 action timer, iuser3 server flags, iuser4 action / state bits

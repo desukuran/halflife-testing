@@ -293,6 +293,9 @@ char PM_FindTextureType( char *name )
 
 void PM_PlayStepSound( int step, float fvol )
 {
+	if ( PMZ_Active() )
+		return;	// Zelda: OoT sounds only
+
 	static int iSkipStep = 0;
 	int irand;
 	vec3_t hvel;
@@ -509,6 +512,10 @@ void PM_UpdateStepSound( void )
 	float flduck;
 	int	fLadder;
 	int step;
+
+	// Zelda: Link's footsteps follow his walk cycle (PMZ_Footsteps)
+	if ( PMZ_Active() )
+		return;
 
 	if ( pmove->flTimeStepSound > 0 )
 		return;

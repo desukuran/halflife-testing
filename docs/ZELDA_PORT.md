@@ -58,7 +58,7 @@ Equip items with `zl_equip <0|1|2> <item number>` (C-left, C-down, C-right; item
 | `zl_dmg_out_scale` | 10 | OoT damage (sword 1/2/4, ...) × this = HL damage dealt to monsters. |
 | `zl_ztoggle` | 0 | Z-targeting: 0 = hold (OoT "Hold"), 1 = toggle (OoT "Switch"). |
 | `zl_model` | `models/player/link/link.mdl` | Player model. If the file doesn't exist (you haven't built it yet), `models/player.mdl` is used. |
-| `zl_sfx_oot` | 0 | 1 = play the OoT `.wav` files from `sound/zelda/oot/` instead of the HL stand-ins. |
+| `zl_sfx_oot` | -1 | OoT sounds from `sound/zelda/oot/`: -1 = whenever `extract_sfx.py`'s output is installed, 1 = always, 0 = never (Half-Life stand-ins). Takes effect on map load. |
 | `zl_hl_suit` | 0 | 1 = also give the HEV suit (HL HUD and voice). |
 | `zl_drops` | 1 | Monsters drop hearts, rupees and ammo when killed. |
 | `zl_hookshot_any` | 1 | 1 = the hookshot sticks to any surface. 0 = OoT rules: only hookable surfaces, here textures with `wood`, `crate`, `hook` or `tree` in the name. |
@@ -226,72 +226,77 @@ If `zl_model` points at a model that has the `link_*` sequence names (see [Link'
 | `ZANIM_SWIM_IDLE` | `gPlayerAnim_link_swimer_swim_wait` → `link_swimer_swim_wait` | `treadwater` | full body |
 ## Sound table
 
-Every sound Link makes is in `pm_shared/zl_sounds.h`. Each entry has a Half-Life stand-in and the OoT `NA_SE_*` it replaces. With `zl_sfx_oot 1`, the game plays `sound/zelda/oot/<NA_SE name>.wav` instead. Use `tools/zelda/convert_sfx.py` to prepare those files.
+Every sound Link makes is listed in `pm_shared/zl_sounds.h` with a Half-Life stand-in, the OoT `NA_SE_*` it replaces, and that sound's random pitch from OoT's SFX tables (`Audio_ComputeSfxFreqScale`). The random pitch applies to the stand-ins as well.
 
-| Id | Half-Life sound (default) | OoT sound (`zl_sfx_oot 1`) | Notes |
-|---|---|---|---|
-| `ZS_VO_SWORD_N` | `sound/player/pl_jump1.wav` | `sound/zelda/oot/NA_SE_VO_LI_SWORD_N.wav` | "Hup!" on sidehops, slashes |
-| `ZS_VO_SWORD_L` | `sound/player/pl_jump2.wav` | `sound/zelda/oot/NA_SE_VO_LI_SWORD_L.wav` | "Hyah!" jump attack, spin |
-| `ZS_VO_AUTO_JUMP` | `sound/player/pl_jump1.wav` | `sound/zelda/oot/NA_SE_VO_LI_AUTO_JUMP.wav` | running off a ledge |
-| `ZS_VO_CLIMB_END` | `sound/player/pl_jump2.wav` | `sound/zelda/oot/NA_SE_VO_LI_CLIMB_END.wav` | pulling up onto a ledge |
-| `ZS_VO_DAMAGE_S` | `sound/player/pl_pain2.wav` | `sound/zelda/oot/NA_SE_VO_LI_DAMAGE_S.wav` | small hit |
-| `ZS_VO_FALL_L` | `sound/player/pl_pain4.wav` | `sound/zelda/oot/NA_SE_VO_LI_FALL_L.wav` | knocked down |
-| `ZS_VO_LAND_DAMAGE_S` | `sound/player/pl_fallpain3.wav` | `sound/zelda/oot/NA_SE_VO_LI_LAND_DAMAGE_S.wav` | fall damage |
-| `ZS_VO_DOWN` | `sound/player/pl_pain6.wav` | `sound/zelda/oot/NA_SE_VO_LI_DOWN.wav` |  |
-| `ZS_VO_DEATH` | `sound/player/pl_pain7.wav` | `sound/zelda/oot/NA_SE_VO_LI_DOWN.wav` | Link's death scream: NA_SE_VO_LI_DOWN + game over jingle |
-| `ZS_VO_LASH` | `sound/player/pl_jump1.wav` | `sound/zelda/oot/NA_SE_VO_LI_LASH.wav` |  |
-| `ZS_PL_ROLL` | `sound/player/pl_duct1.wav` | `sound/zelda/oot/NA_SE_PL_ROLL.wav` |  |
-| `ZS_PL_SKIP` | `sound/player/pl_duct2.wav` | `sound/zelda/oot/NA_SE_PL_SKIP.wav` |  |
-| `ZS_PL_JUMP` | `sound/player/pl_step2.wav` | `sound/zelda/oot/NA_SE_PL_JUMP.wav` |  |
-| `ZS_PL_LAND` | `sound/player/pl_step3.wav` | `sound/zelda/oot/NA_SE_PL_LAND.wav` |  |
-| `ZS_PL_BODY_HIT` | `sound/common/bodydrop3.wav` | `sound/zelda/oot/NA_SE_PL_BODY_HIT.wav` |  |
-| `ZS_PL_DAMAGE` | `sound/player/pl_pain5.wav` | `sound/zelda/oot/NA_SE_PL_DAMAGE.wav` |  |
-| `ZS_PL_CLIMB_CLIFF` | `sound/player/pl_ladder1.wav` | `sound/zelda/oot/NA_SE_PL_CLIMB_CLIFF.wav` |  |
-| `ZS_PL_WALK_GROUND` | `sound/player/pl_step1.wav` | `sound/zelda/oot/NA_SE_PL_WALK_GROUND.wav` |  |
-| `ZS_IT_SWORD_SWING` | `sound/weapons/cbar_miss1.wav` | `sound/zelda/oot/NA_SE_IT_SWORD_SWING.wav` |  |
-| `ZS_IT_SWORD_SWING_HARD` | `sound/weapons/cbar_miss1.wav` | `sound/zelda/oot/NA_SE_IT_SWORD_SWING_HARD.wav` |  |
-| `ZS_IT_SWORD_STRIKE` | `sound/weapons/cbar_hit1.wav` | `sound/zelda/oot/NA_SE_IT_SWORD_STRIKE.wav` | sword on a wall: "clink" and sparks |
-| `ZS_IT_SWORD_HIT` | `sound/weapons/cbar_hitbod1.wav` | `sound/zelda/oot/NA_SE_IT_SWORD_HIT.wav` |  |
-| `ZS_IT_SWORD_CHARGE` | `sound/items/suitcharge1.wav` | `sound/zelda/oot/NA_SE_IT_SWORD_CHARGE.wav` | spin attack charge loop |
-| `ZS_IT_ROLLING_CUT` | `sound/weapons/cbar_miss1.wav` | `sound/zelda/oot/NA_SE_IT_ROLLING_CUT.wav` | spin attack release |
-| `ZS_IT_SHIELD_POSTURE` | `sound/items/gunpickup1.wav` | `sound/zelda/oot/NA_SE_IT_SHIELD_POSTURE.wav` |  |
-| `ZS_IT_SHIELD_REFLECT_SW` | `sound/weapons/cbar_hit2.wav` | `sound/zelda/oot/NA_SE_IT_SHIELD_REFLECT_SW.wav` | blocked a hit |
-| `ZS_IT_SHIELD_BOUND` | `sound/weapons/cbar_hit2.wav` | `sound/zelda/oot/NA_SE_IT_SHIELD_BOUND.wav` |  |
-| `ZS_IT_BOW_DRAW` | `sound/weapons/xbow_reload1.wav` | `sound/zelda/oot/NA_SE_IT_BOW_DRAW.wav` |  |
-| `ZS_IT_ARROW_SHOT` | `sound/weapons/xbow_fire1.wav` | `sound/zelda/oot/NA_SE_IT_ARROW_SHOT.wav` |  |
-| `ZS_IT_ARROW_STICK_OBJ` | `sound/weapons/xbow_hit1.wav` | `sound/zelda/oot/NA_SE_IT_ARROW_STICK_OBJ.wav` |  |
-| `ZS_IT_ARROW_STICK_CRE` | `sound/weapons/xbow_hitbod1.wav` | `sound/zelda/oot/NA_SE_IT_ARROW_STICK_CRE.wav` |  |
-| `ZS_IT_BOMB_IGNIT` | `sound/weapons/mine_activate.wav` | `sound/zelda/oot/NA_SE_IT_BOMB_IGNIT.wav` | lit fuse (loops on the bomb) |
-| `ZS_IT_BOMB_EXPLOSION` | `sound/weapons/explode3.wav` | `sound/zelda/oot/NA_SE_IT_BOMB_EXPLOSION.wav` |  |
-| `ZS_IT_BOMB_BOUND` | `sound/weapons/grenade_hit1.wav` | `sound/zelda/oot/NA_SE_IT_BOMB_BOUND.wav` |  |
-| `ZS_IT_HOOKSHOT_READY` | `sound/weapons/357_cock1.wav` | `sound/zelda/oot/NA_SE_IT_HOOKSHOT_READY.wav` |  |
-| `ZS_IT_HOOKSHOT_CHAIN` | `sound/weapons/xbow_fly1.wav` | `sound/zelda/oot/NA_SE_IT_HOOKSHOT_CHAIN.wav` |  |
-| `ZS_IT_HOOKSHOT_STICK_OBJ` | `sound/weapons/xbow_hit1.wav` | `sound/zelda/oot/NA_SE_IT_HOOKSHOT_STICK_OBJ.wav` |  |
-| `ZS_IT_HOOKSHOT_RECEIVE` | `sound/items/gunpickup2.wav` | `sound/zelda/oot/NA_SE_IT_HOOKSHOT_RECEIVE.wav` |  |
-| `ZS_IT_HOOKSHOT_REFLECT` | `sound/weapons/cbar_hit2.wav` | `sound/zelda/oot/NA_SE_IT_HOOKSHOT_REFLECT.wav` |  |
-| `ZS_IT_DEKU_NUT` | `sound/debris/glass1.wav` | `sound/zelda/oot/NA_SE_IT_EXPLOSION_LIGHT.wav` | Deku Nut flash |
-| `ZS_IT_PUT_AWAY` | `sound/common/wpn_hudoff.wav` | `sound/zelda/oot/NA_SE_PL_CHANGE_ARMS.wav` |  |
-| `ZS_SY_LOCK_ON` | `sound/buttons/blip2.wav` | `sound/zelda/oot/NA_SE_SY_LOCK_ON.wav` |  |
-| `ZS_SY_LOCK_OFF` | `sound/common/wpn_hudoff.wav` | `sound/zelda/oot/NA_SE_SY_LOCK_OFF.wav` |  |
-| `ZS_SY_LOCK_ON_HUMAN` | `sound/buttons/blip1.wav` | `sound/zelda/oot/NA_SE_SY_LOCK_ON_HUMAN.wav` |  |
-| `ZS_SY_CAMERA_ZOOM_UP` | `sound/common/wpn_hudon.wav` | `sound/zelda/oot/NA_SE_SY_CAMERA_ZOOM_UP.wav` |  |
-| `ZS_SY_MESSAGE_PASS` | `sound/buttons/blip1.wav` | `sound/zelda/oot/NA_SE_SY_MESSAGE_PASS.wav` |  |
-| `ZS_SY_MESSAGE_END` | `sound/common/wpn_select.wav` | `sound/zelda/oot/NA_SE_SY_MESSAGE_END.wav` |  |
-| `ZS_SY_CURSOR` | `sound/common/wpn_moveselect.wav` | `sound/zelda/oot/NA_SE_SY_CURSOR.wav` |  |
-| `ZS_SY_DECIDE` | `sound/common/wpn_select.wav` | `sound/zelda/oot/NA_SE_SY_DECIDE.wav` |  |
-| `ZS_SY_ERROR` | `sound/common/wpn_denyselect.wav` | `sound/zelda/oot/NA_SE_SY_ERROR.wav` |  |
-| `ZS_SY_HP_RECOVER` | `sound/items/smallmedkit1.wav` | `sound/zelda/oot/NA_SE_SY_HP_RECOVER.wav` |  |
-| `ZS_SY_HITPOINT_ALARM` | `sound/fvox/beep.wav` | `sound/zelda/oot/NA_SE_SY_HITPOINT_ALARM.wav` |  |
-| `ZS_SY_GET_RUPY` | `sound/items/9mmclip1.wav` | `sound/zelda/oot/NA_SE_SY_GET_RUPY.wav` |  |
-| `ZS_SY_GET_ITEM` | `sound/items/gunpickup2.wav` | `sound/zelda/oot/NA_SE_SY_GET_ITEM.wav` |  |
-| `ZS_SY_GET_BOXITEM` | `sound/items/suitchargeok1.wav` | `sound/zelda/oot/NA_SE_SY_GET_BOXITEM.wav` |  |
-| `ZS_SY_GET_HEART` | `sound/items/smallmedkit1.wav` | `sound/zelda/oot/NA_SE_SY_GET_HEART.wav` |  |
-| `ZS_SY_FSEL_DECIDE_L` | `sound/buttons/bell1.wav` | `sound/zelda/oot/NA_SE_SY_FSEL_DECIDE_L.wav` |  |
-| `ZS_EN_DAMAGE` | `sound/weapons/cbar_hitbod2.wav` | `sound/zelda/oot/NA_SE_EN_DAMAGE.wav` | generic enemy hurt |
-| `ZS_EV_POT_BROKEN` | `sound/debris/bustcrate1.wav` | `sound/zelda/oot/NA_SE_EV_POT_BROKEN.wav` |  |
-| `ZS_EV_CHEST_OPEN` | `sound/doors/doormove2.wav` | `sound/zelda/oot/NA_SE_EV_TBOX_OPEN.wav` |  |
-| `ZS_NAVI_HELLO` | `sound/buttons/blip2.wav` | `sound/zelda/oot/NA_SE_VO_NAVY_HELLO.wav` | Navi: "Hello!" |
-| `ZS_NAVI_HEY` | `sound/buttons/blip1.wav` | `sound/zelda/oot/NA_SE_VO_NAVY_HEAR.wav` | Navi: "Hey!" / "Listen!" |
+The game switches to `sound/zelda/oot/<NA_SE name>.wav` as soon as `tools/zelda/extract_sfx.py` has been run (`zl_sfx_oot -1`, the default). Use `zl_sfx_oot 1` or `0` to force it on or off.
+
+Footsteps follow OoT's walk cycle (`func_8084029C`). Their frequency (0.9 to 1.1) and volume come from Link's speed, and `NA_SE_PL_WALK_GROUND` adds up to 16% random pitch on top.
+
+| Id | Half-Life sound (default) | OoT sound | OoT random pitch | Notes |
+|---|---|---|---|---|
+| `ZS_VO_SWORD_N` | `sound/player/pl_jump1.wav` | `NA_SE_VO_LI_SWORD_N` | – | "Hup!" on sidehops, slashes |
+| `ZS_VO_SWORD_L` | `sound/player/pl_jump2.wav` | `NA_SE_VO_LI_SWORD_L` | – | "Hyah!" jump attack, spin |
+| `ZS_VO_AUTO_JUMP` | `sound/player/pl_jump1.wav` | `NA_SE_VO_LI_AUTO_JUMP` | – | running off a ledge |
+| `ZS_VO_CLIMB_END` | `sound/player/pl_jump2.wav` | `NA_SE_VO_LI_CLIMB_END` | – | pulling up onto a ledge |
+| `ZS_VO_DAMAGE_S` | `sound/player/pl_pain2.wav` | `NA_SE_VO_LI_DAMAGE_S` | – | small hit |
+| `ZS_VO_FALL_L` | `sound/player/pl_pain4.wav` | `NA_SE_VO_LI_FALL_L` | – | knocked down |
+| `ZS_VO_LAND_DAMAGE_S` | `sound/player/pl_fallpain3.wav` | `NA_SE_VO_LI_LAND_DAMAGE_S` | – | fall damage |
+| `ZS_VO_DOWN` | `sound/player/pl_pain6.wav` | `NA_SE_VO_LI_DOWN` | – |  |
+| `ZS_VO_DEATH` | `sound/player/pl_pain7.wav` | `NA_SE_VO_LI_DOWN` | – | Link's death scream: NA_SE_VO_LI_DOWN + game over jingle |
+| `ZS_VO_LASH` | `sound/player/pl_jump1.wav` | `NA_SE_VO_LI_LASH` | – | ZS_PL_* |
+| `ZS_PL_ROLL` | `sound/player/pl_duct1.wav` | `NA_SE_PL_ROLL` | – |  |
+| `ZS_PL_SKIP` | `sound/player/pl_duct2.wav` | `NA_SE_PL_SKIP` | – |  |
+| `ZS_PL_JUMP` | `sound/player/pl_step2.wav` | `NA_SE_PL_JUMP` | – |  |
+| `ZS_PL_LAND` | `sound/player/pl_step3.wav` | `NA_SE_PL_LAND` | +8% |  |
+| `ZS_PL_BODY_HIT` | `sound/common/bodydrop3.wav` | `NA_SE_PL_BODY_HIT` | – |  |
+| `ZS_PL_DAMAGE` | `sound/player/pl_pain5.wav` | `NA_SE_PL_DAMAGE` | – |  |
+| `ZS_PL_CLIMB_CLIFF` | `sound/player/pl_ladder1.wav` | `NA_SE_PL_CLIMB_CLIFF` | – |  |
+| `ZS_PL_WALK_GROUND` | `sound/player/pl_step1.wav` | `NA_SE_PL_WALK_GROUND` | +16% | ZS_IT_* |
+| `ZS_IT_SWORD_SWING` | `sound/weapons/cbar_miss1.wav` | `NA_SE_IT_SWORD_SWING` | +8% |  |
+| `ZS_IT_SWORD_SWING_HARD` | `sound/weapons/cbar_miss1.wav` | `NA_SE_IT_SWORD_SWING_HARD` | – |  |
+| `ZS_IT_SWORD_STRIKE` | `sound/weapons/cbar_hit1.wav` | `NA_SE_IT_SWORD_STRIKE` | – | sword on a wall: "clink" and sparks |
+| `ZS_IT_SWORD_HIT` | `sound/weapons/cbar_hitbod1.wav` | `NA_SE_IT_SWORD_IMPACT` | +8% |  |
+| `ZS_IT_SWORD_CHARGE` | `sound/items/suitcharge1.wav` | `NA_SE_IT_SWORD_CHARGE` | – | spin attack charge loop |
+| `ZS_IT_ROLLING_CUT` | `sound/weapons/cbar_miss1.wav` | `NA_SE_IT_ROLLING_CUT` | – | spin attack release |
+| `ZS_IT_SHIELD_POSTURE` | `sound/items/gunpickup1.wav` | `NA_SE_IT_SHIELD_POSTURE` | +8% |  |
+| `ZS_IT_SHIELD_REFLECT_SW` | `sound/weapons/cbar_hit2.wav` | `NA_SE_IT_SHIELD_REFLECT_SW` | +8% | blocked a hit |
+| `ZS_IT_SHIELD_BOUND` | `sound/weapons/cbar_hit2.wav` | `NA_SE_IT_SHIELD_BOUND` | +16% |  |
+| `ZS_IT_BOW_DRAW` | `sound/weapons/xbow_reload1.wav` | `NA_SE_IT_BOW_DRAW` | +8% |  |
+| `ZS_IT_ARROW_SHOT` | `sound/weapons/xbow_fire1.wav` | `NA_SE_IT_ARROW_SHOT` | +8% |  |
+| `ZS_IT_ARROW_STICK_OBJ` | `sound/weapons/xbow_hit1.wav` | `NA_SE_IT_ARROW_STICK_OBJ` | – |  |
+| `ZS_IT_ARROW_STICK_CRE` | `sound/weapons/xbow_hitbod1.wav` | `NA_SE_IT_ARROW_STICK_CRE` | – |  |
+| `ZS_IT_BOMB_IGNIT` | `sound/weapons/mine_activate.wav` | `NA_SE_IT_BOMB_IGNIT` | – | lit fuse (loops on the bomb) |
+| `ZS_IT_BOMB_EXPLOSION` | `sound/weapons/explode3.wav` | `NA_SE_IT_BOMB_EXPLOSION` | – |  |
+| `ZS_IT_BOMB_BOUND` | `sound/weapons/grenade_hit1.wav` | `NA_SE_EV_BOMB_BOUND` | +16% |  |
+| `ZS_IT_HOOKSHOT_READY` | `sound/weapons/357_cock1.wav` | `NA_SE_IT_HOOKSHOT_READY` | – |  |
+| `ZS_IT_HOOKSHOT_CHAIN` | `sound/weapons/xbow_fly1.wav` | `NA_SE_IT_HOOKSHOT_CHAIN` | – |  |
+| `ZS_IT_HOOKSHOT_STICK_OBJ` | `sound/weapons/xbow_hit1.wav` | `NA_SE_IT_HOOKSHOT_STICK_OBJ` | +8% |  |
+| `ZS_IT_HOOKSHOT_RECEIVE` | `sound/items/gunpickup2.wav` | `NA_SE_IT_HOOKSHOT_RECEIVE` | – |  |
+| `ZS_IT_HOOKSHOT_REFLECT` | `sound/weapons/cbar_hit2.wav` | `NA_SE_IT_HOOKSHOT_REFLECT` | – |  |
+| `ZS_IT_DEKU_NUT` | `sound/debris/glass1.wav` | `NA_SE_IT_EXPLOSION_LIGHT` | – | Deku Nut flash |
+| `ZS_IT_PUT_AWAY` | `sound/common/wpn_hudoff.wav` | `NA_SE_PL_CHANGE_ARMS` | – | ZS_SY_* |
+| `ZS_SY_LOCK_ON` | `sound/buttons/blip2.wav` | `NA_SE_SY_LOCK_ON` | – |  |
+| `ZS_SY_LOCK_OFF` | `sound/common/wpn_hudoff.wav` | `NA_SE_SY_LOCK_OFF` | – |  |
+| `ZS_SY_LOCK_ON_HUMAN` | `sound/buttons/blip1.wav` | `NA_SE_SY_LOCK_ON_HUMAN` | – |  |
+| `ZS_SY_CAMERA_ZOOM_UP` | `sound/common/wpn_hudon.wav` | `NA_SE_SY_CAMERA_ZOOM_UP` | – |  |
+| `ZS_SY_MESSAGE_PASS` | `sound/buttons/blip1.wav` | `NA_SE_SY_MESSAGE_PASS` | – |  |
+| `ZS_SY_MESSAGE_END` | `sound/common/wpn_select.wav` | `NA_SE_SY_MESSAGE_END` | – |  |
+| `ZS_SY_CURSOR` | `sound/common/wpn_moveselect.wav` | `NA_SE_SY_CURSOR` | – |  |
+| `ZS_SY_DECIDE` | `sound/common/wpn_select.wav` | `NA_SE_SY_DECIDE` | – |  |
+| `ZS_SY_ERROR` | `sound/common/wpn_denyselect.wav` | `NA_SE_SY_ERROR` | – |  |
+| `ZS_SY_HP_RECOVER` | `sound/items/smallmedkit1.wav` | `NA_SE_SY_HP_RECOVER` | – |  |
+| `ZS_SY_HITPOINT_ALARM` | `sound/fvox/beep.wav` | `NA_SE_SY_HITPOINT_ALARM` | – |  |
+| `ZS_SY_GET_RUPY` | `sound/items/9mmclip1.wav` | `NA_SE_SY_GET_RUPY` | – |  |
+| `ZS_SY_GET_ITEM` | `sound/items/gunpickup2.wav` | `NA_SE_SY_GET_ITEM` | – |  |
+| `ZS_SY_GET_BOXITEM` | `sound/items/suitchargeok1.wav` | `NA_SE_SY_GET_BOXITEM` | – |  |
+| `ZS_SY_GET_HEART` | `sound/items/smallmedkit1.wav` | `NA_SE_SY_HP_RECOVER` | – |  |
+| `ZS_SY_FSEL_DECIDE_L` | `sound/buttons/bell1.wav` | `NA_SE_SY_FSEL_DECIDE_L` | – | Enemies / environment |
+| `ZS_EN_DAMAGE` | `sound/weapons/cbar_hitbod2.wav` | `NA_SE_EN_STAL_DAMAGE` | – | OoT has no generic enemy hurt; a Stalchild's |
+| `ZS_EV_POT_BROKEN` | `sound/debris/bustcrate1.wav` | `NA_SE_EV_POT_BROKEN` | – |  |
+| `ZS_EV_CHEST_OPEN` | `sound/doors/doormove2.wav` | `NA_SE_EV_TBOX_OPEN` | – |  |
+| `ZS_NAVI_HELLO` | `sound/buttons/blip2.wav` | `NA_SE_VO_NA_HELLO_3` | – | Navi: "Hey!" (Object_Kankyo; NA_SE_VO_NAVY_HELLO is silent in OoT) |
+| `ZS_NAVI_HEY` | `sound/buttons/blip1.wav` | `NA_SE_VO_NA_HELLO_2` | +8% | Navi: "Listen!" (played right after "Hey!") |
+
 ## Assets from your own ROM
 
 None of these files are committed. All of them are listed in `.gitignore`.
@@ -320,15 +325,20 @@ The client prefers both over the generated stand-ins.
 
 ### Sound effects
 
-1. Record each effect from an emulator, or take it from the extracted samples.
-2. Name each file after its `NA_SE_*` entry (see the table above, or run `convert_sfx.py --list`).
-3. Convert them:
-
 ```sh
-python3 tools/zelda/convert_sfx.py --in my_wavs --out zelda/sound/zelda/oot
+python3 tools/zelda/extract_sfx.py --oot /path/to/oot
 ```
 
-4. Set `zl_sfx_oot 1`.
+OoT has no sound effect files. Each `NA_SE_*` is a little program in the SFX sequence (`seq_0.prg.seq`) that plays instrument samples.
+
+`extract_sfx.py` interprets those programs over the samples `make setup` extracted and writes 22 kHz WAVs into `zelda/sound/zelda/oot/`. It covers:
+
+- notes, instruments, transposes, pitch slides, legato, loops
+- voice clips with several takes: `NA_SE_VO_LI_SWORD_N` has four "Hup!"s, written as `NAME.wav`, `NAME_2.wav`, ... plus `variants.txt`. The game picks one at random, like OoT.
+
+Envelopes, vibrato and filters are approximated or ignored. Sounds that loop until stopped are cut at `--max-seconds`.
+
+`--all` renders every sound in the game. `convert_sfx.py` is still there if you'd rather convert your own recordings.
 
 ### Music
 
@@ -395,7 +405,7 @@ The room contains:
 1. **Link model.** Done for adult Link (`make_link_model.py`). Still to do: child Link (`object_link_child`), the animated face (each animation frame carries an eye/mouth index), and the Goron/Zora tunics as skins.
    - The sequence names must match the `link.mdl` column above. `zl_anim.cpp` picks them up automatically.
    - Blender is useful for checking the skeleton and for any cleanup.
-2. **SFX extraction.** Pull the effects straight from the extracted audio banks instead of recording them by hand.
+2. **SFX.** Done (`extract_sfx.py`). Still to do: ADSR envelopes and vibrato, and the floor-surface footstep variants (grass, wood, water: `SURFACE_SFX_OFFSET_*`).
 3. **Pause subscreen.** Item select, equipment and map, in place of the `zl_equip` and `zl_inventory` commands.
 4. **More of the OoT feel.** Crawlspaces, ladders and vines, swimming, pushing blocks, and Navi hints on C-up.
 5. **In-game tuning.** None of this has been run in the engine yet. Expect camera and animation tuning once it has.

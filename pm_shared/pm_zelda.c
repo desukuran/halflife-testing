@@ -190,7 +190,8 @@ static int PMZ_OnGround( void )
 	return pmove->onground != -1;
 }
 
-static void PMZ_Sound( int channel, int id, float vol )
+// freq: OoT's caller side frequency scale; the sound's own random pitch (zl_sounds.h) goes on top
+static void PMZ_SoundEx( int channel, int id, float vol, float freq )
 {
 	char path[96];
 	const char *sample;
@@ -204,7 +205,8 @@ static void PMZ_Sound( int channel, int id, float vol )
 
 	if ( atoi( pmove->PM_Info_ValueForKey( pmove->physinfo, "zs" ) ) )
 	{
-		snprintf( path, sizeof( path ), "zelda/oot/%s.wav", g_zlSounds[id].oot );
+		int takes = ZL_SoundTakes( pmove->PM_Info_ValueForKey( pmove->physinfo, "zv" ), id );
+		ZL_OoTSoundPath( path, sizeof( path ), id, takes > 1 ? pmove->RandomLong( 1, takes ) : 1 );
 		sample = path;
 	}
 	else
@@ -212,7 +214,12 @@ static void PMZ_Sound( int channel, int id, float vol )
 		sample = g_zlSounds[id].hl;
 	}
 
-	pmove->PM_PlaySound( channel, sample, vol, ATTN_NORM, 0, PITCH_NORM );
+	pmove->PM_PlaySound( channel, sample, vol, ATTN_NORM, 0, ZL_SoundPitch( id, freq, pmove->RandomLong( 0, 0x7FFF ) ) );
+}
+
+static void PMZ_Sound( int channel, int id, float vol )
+{
+	PMZ_SoundEx( channel, id, vol, 1.0f );
 }
 
 /*
@@ -1104,10 +1111,59 @@ int PMZ_Think( void )
 	return 0;
 }
 
+/*
+ Player_PlaySteppingSfx / func_8084029C: a step phase runs over the 29 frame walk cycle at
+ (speed * 0.3 + 1) frames per game frame (x1.5 for the 20 Hz update, at most 7.25) and a step
+ plays as it passes frames 10 and 24. func_800F3F84 then sets the step's frequency
+ 0.9 .. 1.1 and volume 0.775 .. 1.0 from the speed, and NA_SE_PL_WALK_GROUND's table entry adds
+ up to +16% random pitch. The phase lives in fuser2 (predicted, see zelda/delta.lst).
+*/
+static void PMZ_Footsteps( int act, int onground )
+{
+	float spd, rate, phase, next;
+	int i;
+	static const float stepFrames[2] = { 10.0f, 24.0f };
+
+	if ( !onground || ( act != ZACT_STAND && act != ZACT_SHIELD && act != ZACT_SPIN_CHARGE ) || pmove->waterlevel >= 2 )
+		return;
+
+	spd = (float)sqrt( pmove->velocity[0] * pmove->velocity[0] + pmove->velocity[1] * pmove->velocity[1] ) / ZL_VEL( 1.0f );
+	if ( spd < 0.3f )
+		return;
+
+	rate = ( spd * 0.3f + 1.0f ) * 1.5f;
+	if ( rate > 7.25f )
+		rate = 7.25f;
+	rate *= pmove->cmd.msec * 0.001f * 20.0f;
+
+	phase = pmove->fuser2;
+	if ( phase < 0 || phase >= 29.0f )
+		phase = 0;
+	next = phase + rate;
+
+	for ( i = 0; i < 2; i++ )
+	{
+		float t = stepFrames[i];
+		if ( ( phase < t && next >= t ) || ( phase < t + 29.0f && next >= t + 29.0f ) )
+		{
+			float r = spd > 6.0f ? 1.0f : spd / 6.0f;
+			float freq = spd > 6.0f ? 1.1f : r * 0.2f + 0.9f;
+			float vol = spd > 6.0f ? 1.0f : r * 0.225f + 0.775f;
+			PMZ_SoundEx( CHAN_BODY, ZS_PL_WALK_GROUND, vol * 0.7f, freq );
+		}
+	}
+
+	while ( next >= 29.0f )
+		next -= 29.0f;
+	pmove->fuser2 = next;
+}
+
 void PMZ_PostMove( void )
 {
 	int act = PMZ_Action();
 	int onground = PMZ_OnGround();
+
+	PMZ_Footsteps( act, onground );
 
 	// Clamp to minVelocityY
 	if ( pmove->velocity[2] < -ZL_MAX_FALL_SPEED )

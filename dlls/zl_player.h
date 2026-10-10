@@ -188,6 +188,8 @@ void ZL_RegisterCvars( void );
 void ZL_PrecacheAll( void );
 void ZL_EmitSound( edict_t *pEdict, int channel, int sound, float volume, float attn, int pitch );
 const char *ZL_SoundPath( int sound );
+const char *ZL_SoundTakesKey( void );
+BOOL ZL_UseOoTSounds( void );		// zl_sfx_oot, with -1 = whenever extract_sfx.py's output is there	// "zv" physinfo: takes per sound id
 
 // Damage translation (zl_combat.cpp)
 int		ZL_HLDamageToHealth( float flDamage, int bitsDamageType );

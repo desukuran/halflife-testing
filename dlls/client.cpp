@@ -1728,6 +1728,7 @@ void UpdateClientData ( const edict_t *ent, int sendweapons, struct clientdata_s
 	// Zelda: Link's predicted state (pm_shared/zl_shared.h), added to clientdata_t in zelda/delta.lst
 	cd->fuser1			= pev->fuser1;
 	cd->fuser4			= pev->fuser4;
+	cd->fuser2			= pev->fuser2;	// Zelda: footstep phase
 	cd->iuser3			= pev->iuser3;
 	cd->iuser4			= pev->iuser4;
 

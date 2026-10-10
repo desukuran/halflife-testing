@@ -81,14 +81,16 @@ void ZL_PlaySound( int sound, float volume )
 {
 	char path[128];
 	const char *sample;
-	cvar_t *oot = gEngfuncs.pfnGetCvarPointer( "zl_sfx_oot" );
 
 	if ( sound < 0 || sound >= ZS_COUNT )
 		return;
 
-	if ( oot && oot->value )
+	// The server says whether OoT sounds are in use (zl_sfx_oot can be "auto")
+	const char *zs = gEngfuncs.PhysInfo_ValueForKey( "zs" );
+	if ( zs && atoi( zs ) )
 	{
-		snprintf( path, sizeof( path ), "zelda/oot/%s.wav", g_zlSounds[sound].oot );
+		int takes = ZL_SoundTakes( gEngfuncs.PhysInfo_ValueForKey( "zv" ), sound );
+		ZL_OoTSoundPath( path, sizeof( path ), sound, takes > 1 ? gEngfuncs.pfnRandomLong( 1, takes ) : 1 );
 		sample = path;
 	}
 	else

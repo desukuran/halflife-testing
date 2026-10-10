@@ -24,7 +24,7 @@ cvar_t zl_dmg_in_scale	= { "zl_dmg_in_scale", "0.8", FCVAR_SERVER };	// HL damag
 cvar_t zl_dmg_out_scale	= { "zl_dmg_out_scale", "10", FCVAR_SERVER };	// OoT damage -> HL damage
 cvar_t zl_ztoggle		= { "zl_ztoggle", "0", FCVAR_ARCHIVE };		// OoT options menu: Z Target "Switch" instead of "Hold"
 cvar_t zl_model			= { "zl_model", "models/player/link/link.mdl", FCVAR_ARCHIVE };	// tools/zelda/make_link_model.py builds it
-cvar_t zl_sfx_oot		= { "zl_sfx_oot", "0", FCVAR_ARCHIVE };		// use ripped OoT sounds from sound/zelda/oot/
+cvar_t zl_sfx_oot		= { "zl_sfx_oot", "-1", FCVAR_ARCHIVE };	// OoT sounds from sound/zelda/oot/: 1 on, 0 off, -1 when installed
 cvar_t zl_hl_suit		= { "zl_hl_suit", "0", FCVAR_SERVER };		// also give the HEV suit (HL HUD + voice)
 cvar_t zl_drops			= { "zl_drops", "1", FCVAR_SERVER };		// monsters drop rupees / hearts
 cvar_t zl_hookshot_any	= { "zl_hookshot_any", "1", FCVAR_SERVER };	// hookshot sticks to anything, not just wood
@@ -288,7 +288,8 @@ void CLinkPlayer::Spawn( void )
 	}
 
 	g_engfuncs.pfnSetPhysicsKeyValue( edict(), "zl", "1" );
-	g_engfuncs.pfnSetPhysicsKeyValue( edict(), "zs", zl_sfx_oot.value ? "1" : "0" );
+	g_engfuncs.pfnSetPhysicsKeyValue( edict(), "zs", ZL_UseOoTSounds() ? "1" : "0" );
+	g_engfuncs.pfnSetPhysicsKeyValue( edict(), "zv", ZL_SoundTakesKey() );
 
 	if ( strcmp( ZL_PlayerModel(), "models/player.mdl" ) )
 	{

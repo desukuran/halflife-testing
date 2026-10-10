@@ -15,6 +15,7 @@ projects/vs2019/.vs/
 zelda/sprites/oot/
 zelda/resource/zl_oot_messages.txt
 zelda/sound/zelda/oot/*.wav
+zelda/sound/zelda/oot/variants.txt
 zelda/music/**/*.miniusf
 zelda/music/**/*.usf
 zelda/music/**/*.usflib
