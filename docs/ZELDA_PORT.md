@@ -89,6 +89,9 @@ Equip items with `zl_equip <0|1|2> <item number>` (C-left, C-down, C-right; item
 | `zmus_stop [fadeout seconds]` | Fade out the music. |
 | `zmus_info` | Print the current track, its tags and the playback position. |
 | `zmsg_test <NAME>` | Open any text box from the message database. |
+| `zl_text_test <NAME>` (cvar) | Same as `zmsg_test`, as a cvar: setting it opens that message once and clears it. Names are the ones in `zl_messages.txt`, or text ids like `0x1000` from your ripped `zl_oot_messages.txt`. |
+| `zl_text_next [n]` / `zl_text_prev [n]` | Step through every loaded message in order (n at a time). |
+| `zl_text_list [filter]` | List message names with the start of their text, e.g. `zl_text_list ITEM_`. |
 | `zl_reload_messages` | Reload `resource/zl_messages.txt` and `zl_oot_messages.txt`. |
 | `zl_give <all\|rupees [n]\|heart\|magic\|item number>` | Cheat (needs `sv_cheats 1`). Item numbers: 1 bow, 2 bombs, 3 hookshot, 4 longshot, 5 nuts. |
 | `zl_equip <slot 0-2> <item number>` | Put an item on C-left / C-down / C-right. 0 empties the slot. |

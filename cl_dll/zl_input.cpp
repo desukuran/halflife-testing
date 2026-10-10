@@ -24,6 +24,8 @@
 #include "cl_entity.h"
 #include "zl_client.h"
 
+extern kbutton_t in_mlook;
+extern kbutton_t in_strafe;
 extern kbutton_t in_jump;
 extern kbutton_t in_attack;
 extern kbutton_t in_alt1;
@@ -117,6 +119,26 @@ static int ZInput_Pad( int buttons )
 	if ( buttons & ZBTN_CRIGHT )	pad |= ZPAD_CRIGHT;
 	if ( buttons & ZBTN_CUP )		pad |= ZPAD_CUP;
 	return pad;
+}
+
+// The mouse only ever turns the camera. Without +mlook, Half-Life turns vertical mouse motion
+// into forwardmove (IN_MouseMove), which walked Link around whenever the camera was tilted,
+// and +strafe would turn horizontal motion into sidemove. Hold mlook down for as long as
+// we're Link; zl_camera reads the pitch change back out of the view angles.
+void ZInput_PreCreateMove( void )
+{
+	static int forced;
+	if ( ZL_IsLink() )
+	{
+		in_mlook.state |= 1;
+		in_strafe.state &= ~1;
+		forced = 1;
+	}
+	else if ( forced )
+	{
+		in_mlook.state &= ~1;
+		forced = 0;
+	}
 }
 
 void ZInput_CreateMove( float frametime, struct usercmd_s *cmd, int active )

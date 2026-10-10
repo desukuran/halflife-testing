@@ -144,6 +144,7 @@ int		ZCam_IsFirstPerson( void );
 
 // zl_input.cpp
 void	ZInput_Init( void );
+void	ZInput_PreCreateMove( void );
 void	ZInput_CreateMove( float frametime, struct usercmd_s *cmd, int active );
 int		ZInput_TranslateWeaponButtons( int buttons );
 

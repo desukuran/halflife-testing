@@ -33,6 +33,8 @@
 
 #include <math.h>
 
+extern vec3_t v_angles, v_origin;	// view.cpp
+
 enum
 {
 	ZCAM_NORMAL,
@@ -178,6 +180,11 @@ static void ZCam_SetView( struct ref_params_s *pparams, const Vector &eye, const
 	pparams->viewangles[0] = ang[0];
 	pparams->viewangles[1] = ang[1];
 	pparams->viewangles[2] = 0;
+
+	// view.cpp stored v_angles / v_origin before we moved the camera; the HUD's reticle
+	// projection reads them
+	VectorCopy( pparams->viewangles, v_angles );
+	VectorCopy( pparams->vieworg, v_origin );
 
 	// The usercmd carries the camera angles
 	Vector set( ang[0], ang[1], 0.0f );

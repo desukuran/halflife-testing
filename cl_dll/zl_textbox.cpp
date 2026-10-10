@@ -420,6 +420,75 @@ struct zl_textstate_t
 static zl_textstate_t s_text;
 static cvar_t *zl_text_speed;
 static cvar_t *zl_name;
+static cvar_t *zl_text_test;
+
+/*
+=============================================================================
+ Testing: zl_text_test <name>, zl_text_next / zl_text_prev, zl_text_list [filter]
+
+ The box is opened through the server (zmsg_test) so Link stops and the A/B buttons go to
+ the text box exactly like a real conversation.
+=============================================================================
+*/
+static int s_testIndex = -1;
+
+static void ZText_TestOpen( const char *name )
+{
+	char cmd[96];
+	snprintf( cmd, sizeof( cmd ), "zmsg_test \"%s\"\n", name );
+	gEngfuncs.pfnClientCmd( cmd );
+	gEngfuncs.Con_Printf( "zl_text_test: %s\n", name );
+}
+
+static void ZText_TestStep( int dir )
+{
+	if ( !s_numMessages )
+		return;
+	if ( gEngfuncs.Cmd_Argc() > 1 )
+		dir *= max( 1, atoi( gEngfuncs.Cmd_Argv( 1 ) ) );
+	s_testIndex = ( ( s_testIndex + dir ) % s_numMessages + s_numMessages ) % s_numMessages;
+	gEngfuncs.Con_Printf( "[%d/%d] ", s_testIndex + 1, s_numMessages );
+	ZText_TestOpen( s_messages[s_testIndex].name );
+}
+
+static void ZText_TestNext( void ) { ZText_TestStep( 1 ); }
+static void ZText_TestPrev( void ) { ZText_TestStep( -1 ); }
+
+static void ZText_TestList( void )
+{
+	const char *filter = gEngfuncs.Cmd_Argc() > 1 ? gEngfuncs.Cmd_Argv( 1 ) : "";
+	int shown = 0;
+	for ( int i = 0; i < s_numMessages; i++ )
+	{
+		if ( filter[0] && !strstr( s_messages[i].name, filter ) )
+			continue;
+		// First line of the text, codes and all, so you can find a message by what it says
+		char preview[48];
+		strncpy( preview, s_messages[i].text, sizeof( preview ) - 1 );
+		preview[sizeof( preview ) - 1] = 0;
+		for ( char *c = preview; *c; c++ )
+			if ( *c == '\n' ) { *c = 0; break; }
+		gEngfuncs.Con_Printf( "%4d %-24s %s\n", i + 1, s_messages[i].name, preview );
+		shown++;
+	}
+	gEngfuncs.Con_Printf( "%d of %d messages\n", shown, s_numMessages );
+}
+
+// Called every HUD frame: setting zl_text_test opens that message once
+static void ZText_PollTestCvar( void )
+{
+	if ( !zl_text_test || !zl_text_test->string || !zl_text_test->string[0] )
+		return;
+	char name[64];
+	strncpy( name, zl_text_test->string, sizeof( name ) - 1 );
+	name[sizeof( name ) - 1] = 0;
+	gEngfuncs.Cvar_Set( (char *)"zl_text_test", (char *)"" );
+
+	for ( int i = 0; i < s_numMessages; i++ )
+		if ( !stricmp( s_messages[i].name, name ) )
+			s_testIndex = i;
+	ZText_TestOpen( name );
+}
 
 void ZText_Init( void )
 {
@@ -427,6 +496,11 @@ void ZText_Init( void )
 	zl_name = CVAR_CREATE( "zl_name", "Link", FCVAR_ARCHIVE | FCVAR_USERINFO );
 	memset( &s_text, 0, sizeof( s_text ) );
 	gEngfuncs.pfnAddCommand( "zl_reload_messages", ZText_LoadMessages );
+
+	zl_text_test = CVAR_CREATE( "zl_text_test", "", 0 );	// set to a message name to show it
+	gEngfuncs.pfnAddCommand( "zl_text_next", ZText_TestNext );
+	gEngfuncs.pfnAddCommand( "zl_text_prev", ZText_TestPrev );
+	gEngfuncs.pfnAddCommand( "zl_text_list", ZText_TestList );
 }
 
 void ZText_VidInit( void )
@@ -690,6 +764,8 @@ static void ZText_DrawBox( float x, float y, float w, float h, int r, int g, int
 
 void ZText_Draw( float time )
 {
+	ZText_PollTestCvar();
+
 	if ( s_text.state == ZT_CLOSED )
 		return;
 

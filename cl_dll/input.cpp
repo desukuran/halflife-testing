@@ -44,6 +44,7 @@ int CL_ButtonBits( int );
 void ZInput_Init( void );
 int ZInput_ButtonBits( int bResetState );
 void ZInput_CreateMove( float frametime, struct usercmd_s *cmd, int active );
+void ZInput_PreCreateMove( void );
 void ZMusic_Shutdown( void );
 
 // xxx need client dll function to get and clear impuse
@@ -670,6 +671,8 @@ void CL_DLLEXPORT CL_CreateMove ( float frametime, struct usercmd_s *cmd, int ac
 	float spd;
 	vec3_t viewangles;
 	static vec3_t oldangles;
+
+	ZInput_PreCreateMove();
 
 	if ( active && !Bench_Active() )
 	{
