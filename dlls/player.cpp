@@ -25,6 +25,9 @@
 
 #include "cbase.h"
 #include "player.h"
+#include "zl_player.h"
+
+void ZL_OnWeaponPickup( CBasePlayer *pPlayer, CBasePlayerItem *pItem );	// zl_items.cpp
 #include "trains.h"
 #include "nodes.h"
 #include "weapons.h"
@@ -201,6 +204,7 @@ void LinkUserMessages( void )
 	}
 
 	gmsgSelAmmo = REG_USER_MSG("SelAmmo", sizeof(SelAmmo));
+	ZL_RegisterMessages();
 	gmsgCurWeapon = REG_USER_MSG("CurWeapon", 3);
 	gmsgGeigerRange = REG_USER_MSG("Geiger", 1);
 	gmsgFlashlight = REG_USER_MSG("Flashlight", 2);
@@ -240,7 +244,8 @@ void LinkUserMessages( void )
 
 }
 
-LINK_ENTITY_TO_CLASS( player, CBasePlayer );
+// Zelda: "player" is CLinkPlayer now (zl_player.cpp)
+// LINK_ENTITY_TO_CLASS( player, CBasePlayer );
 
 
 
@@ -3872,6 +3877,9 @@ int CBasePlayer::AddPlayerItem( CBasePlayerItem *pItem )
 
 		pItem->m_pNext = m_rgpPlayerItems[pItem->iItemSlot()];
 		m_rgpPlayerItems[pItem->iItemSlot()] = pItem;
+
+		// Zelda: borrowed weapons go on a free C button
+		ZL_OnWeaponPickup( this, pItem );
 
 		// should we switch to this item?
 		if ( g_pGameRules->FShouldSwitchWeapon( this, pItem ) )

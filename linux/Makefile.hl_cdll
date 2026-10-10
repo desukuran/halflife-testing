@@ -92,6 +92,12 @@ HL1_OBJS = \
 	$(HL1_OBJ_DIR)/vgui_teammenu.o \
 	$(HL1_OBJ_DIR)/voice_status.o \
 	$(HL1_OBJ_DIR)/hud_servers.o \
+	$(HL1_OBJ_DIR)/zl_camera.o \
+	$(HL1_OBJ_DIR)/zl_draw.o \
+	$(HL1_OBJ_DIR)/zl_hud.o \
+	$(HL1_OBJ_DIR)/zl_input.o \
+	$(HL1_OBJ_DIR)/zl_music.o \
+	$(HL1_OBJ_DIR)/zl_textbox.o \
 	
 
 DLL_OBJS = \
@@ -131,13 +137,82 @@ PM_SHARED_OBJS = \
 	$(PM_SHARED_OBJ_DIR)/pm_debug.o \
 	$(PM_SHARED_OBJ_DIR)/pm_shared.o \
 	$(PM_SHARED_OBJ_DIR)/pm_math.o \
+	$(PM_SHARED_OBJ_DIR)/pm_zelda.o \
 	
 
 
+
+# Zelda: music (lazyusf2 + psflib + zlib), plain C
+ZL_EXT_DIR=$(SOURCE_DIR)/external
+ZL_EXT_OBJ_DIR=$(HL1_OBJ_DIR)/zlext
+ZL_EXT_CC=$(CC) $(ARCH_CFLAGS) -fno-strict-aliasing -w -I$(ZL_EXT_DIR)/lazyusf2 -I$(ZL_EXT_DIR)/zlib -o $@ -c $<
+
+ZL_EXT_OBJS = \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/ai/ai_controller.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/api/callbacks.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/debugger/dbg_decoder.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/main/main.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/main/rom.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/main/savestates.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/main/util.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/memory/memory.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/pi/cart_rom.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/pi/pi_controller.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/r4300/cached_interp.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/r4300/cp0.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/r4300/cp1.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/r4300/exception.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/r4300/interupt.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/r4300/mi_controller.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/r4300/pure_interp.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/r4300/r4300.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/r4300/r4300_core.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/r4300/recomp.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/r4300/reset.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/r4300/tlb.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/r4300/empty_dynarec.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/rdp/rdp_core.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/ri/rdram.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/ri/rdram_detection_hack.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/ri/ri_controller.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/rsp/rsp_core.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/rsp_hle/alist.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/rsp_hle/alist_audio.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/rsp_hle/alist_naudio.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/rsp_hle/alist_nead.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/rsp_hle/audio.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/rsp_hle/cicx105.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/rsp_hle/hle.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/rsp_hle/hvqm.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/rsp_hle/jpeg.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/rsp_hle/memory.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/rsp_hle/mp3.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/rsp_hle/musyx.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/rsp_hle/plugin.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/rsp_hle/re2.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/rsp_lle/rsp.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/si/cic.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/si/game_controller.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/si/n64_cic_nus_6105.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/si/pif.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/si/si_controller.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/usf/usf.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/usf/barray.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/usf/resampler.o \
+	$(ZL_EXT_OBJ_DIR)/lazyusf2/vi/vi_controller.o \
+	$(ZL_EXT_OBJ_DIR)/psflib/psflib.o \
+	$(ZL_EXT_OBJ_DIR)/zlib/adler32.o \
+	$(ZL_EXT_OBJ_DIR)/zlib/crc32.o \
+	$(ZL_EXT_OBJ_DIR)/zlib/inffast.o \
+	$(ZL_EXT_OBJ_DIR)/zlib/inflate.o \
+	$(ZL_EXT_OBJ_DIR)/zlib/inftrees.o \
+	$(ZL_EXT_OBJ_DIR)/zlib/uncompr.o \
+	$(ZL_EXT_OBJ_DIR)/zlib/zutil.o \
+
 all: client.$(SHLIBEXT)
 
-client.$(SHLIBEXT): $(HL1_OBJS) $(PUBLIC_OBJS) $(COMMON_OBJS) $(GAME_SHARED_OBJS) $(DLL_OBJS) $(PM_SHARED_OBJS)
-	$(CLINK) -o $(BUILD_DIR)/$@ $(HL1_OBJS) $(PUBLIC_OBJS) $(COMMON_OBJS) $(GAME_SHARED_OBJS) $(DLL_OBJS) $(PM_SHARED_OBJS) $(LDFLAGS) $(CPP_LIB)
+client.$(SHLIBEXT): $(HL1_OBJS) $(PUBLIC_OBJS) $(COMMON_OBJS) $(GAME_SHARED_OBJS) $(DLL_OBJS) $(PM_SHARED_OBJS) $(ZL_EXT_OBJS)
+	$(CLINK) -o $(BUILD_DIR)/$@ $(HL1_OBJS) $(PUBLIC_OBJS) $(COMMON_OBJS) $(GAME_SHARED_OBJS) $(DLL_OBJS) $(PM_SHARED_OBJS) $(ZL_EXT_OBJS) $(LDFLAGS) $(CPP_LIB)
 ifeq ($(CREATE_OUTPUT_DIRS),1)
 	mkdir -p $(HL_OUTPUT_DIR)/cl_dlls
 endif
@@ -193,6 +268,10 @@ $(GAME_SHARED_OBJ_DIR)/%.o : $(GAME_SHARED_SRC_DIR)/%.cpp $(filter-out $(wildcar
 
 $(PM_SHARED_OBJ_DIR)/%.o : $(PM_SHARED_SRC_DIR)/%.c $(filter-out $(wildcard  $(PM_SHARED_OBJ_DIR)),  $(PM_SHARED_OBJ_DIR))
 	$(DO_PM_SHARED_CC)
+
+$(ZL_EXT_OBJ_DIR)/%.o : $(ZL_EXT_DIR)/%.c
+	@mkdir -p $(dir $@)
+	$(ZL_EXT_CC)
 
 clean:
 	-rm -rf $(HL1_OBJ_DIR)

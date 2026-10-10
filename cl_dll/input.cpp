@@ -40,6 +40,12 @@ void V_Init( void );
 void VectorAngles( const float *forward, float *angles );
 int CL_ButtonBits( int );
 
+// Zelda (zl_input.cpp)
+void ZInput_Init( void );
+int ZInput_ButtonBits( int bResetState );
+void ZInput_CreateMove( float frametime, struct usercmd_s *cmd, int active );
+void ZMusic_Shutdown( void );
+
 // xxx need client dll function to get and clear impuse
 extern cvar_t *in_joystick;
 
@@ -764,6 +770,9 @@ void CL_DLLEXPORT CL_CreateMove ( float frametime, struct usercmd_s *cmd, int ac
 	}
 
 	Bench_SetViewAngles( 1, (float *)&cmd->viewangles, frametime, cmd );
+
+	// Zelda: text box input, Z-target focus point
+	ZInput_CreateMove( frametime, cmd, active );
 }
 
 /*
@@ -865,6 +874,9 @@ int CL_ButtonBits( int bResetState )
 		bits |= IN_SCORE;
 	}
 
+	// Zelda: C-right / C-up
+	bits |= ZInput_ButtonBits( bResetState );
+
 	// Dead or in intermission? Shore scoreboard, too
 	if ( CL_IsDead() || gHUD.m_iIntermission )
 	{
@@ -925,6 +937,7 @@ InitInput
 */
 void InitInput (void)
 {
+	ZInput_Init();
 	gEngfuncs.pfnAddCommand ("+moveup",IN_UpDown);
 	gEngfuncs.pfnAddCommand ("-moveup",IN_UpUp);
 	gEngfuncs.pfnAddCommand ("+movedown",IN_DownDown);
@@ -1038,4 +1051,7 @@ void CL_DLLEXPORT HUD_Shutdown( void )
 #endif
 	
 	CL_UnloadParticleMan();
+
+	// Zelda: stop the music thread / audio device
+	ZMusic_Shutdown();
 }

@@ -1,6 +1,7 @@
 // view/refresh setup functions
 
 #include "hud.h"
+#include "zl_client.h"
 #include "cl_util.h"
 #include "cvardef.h"
 #include "usercmd.h"
@@ -822,6 +823,12 @@ void V_CalcNormalRefdef ( struct ref_params_s *pparams )
 			// Store off overridden viewangles
 			v_angles = pparams->viewangles;
 		}
+	}
+	else if ( ZL_IsLink() )
+	{
+		// Zelda: OoT camera (zl_camera.cpp)
+		ZCam_CalcRefdef( pparams );
+		v_angles = pparams->viewangles;
 	}
 
 	// Update the latched view origin/angles here, this was

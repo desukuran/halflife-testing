@@ -1,0 +1,255 @@
+// Zelda 64 port: message box text.
+//
+// @NAME [BLACK|WOODEN|BLUE|NONE] [VARIABLE|TOP|MIDDLE|BOTTOM]
+// Text follows until the next @ line. Keep lines to about 26 characters and boxes to 4 lines,
+// like the N64 game. NAME#1, NAME#2... make a pool that is picked from at random.
+//
+// Codes (same meaning as the decomp's message_data_fmt.h macros):
+//   {BOX} next box        {BOX:n} next box after n frames      {FADE:n} close after n frames
+//   {RED} {GREEN} {BLUE} {LIGHTBLUE} {PURPLE} {YELLOW} {BLACK} {WHITE}
+//   {NAME} player name    {SHIFT:n}   {INSTANT} ... {/INSTANT}   {SPEED:n}   {WAIT}
+//   {CHOICE2} {CHOICE3}   the last 2 / 3 lines of the box are the options (first = yes)
+//   {SFX:NA_SE_SY_...}    play a sound from pm_shared/zl_sounds.h
+//   {UNSKIPPABLE}
+//
+// The game asks for these names:
+//   SC_IDLE, SC_FOLLOW_ASK, SC_STAY_ASK       scientists
+//   BA_IDLE, BA_FOLLOW_ASK, BA_STAY_ASK       security guards
+//   NPC_IDLE                                  anything else with no "message" key set
+//   ITEM_*                                    item get boxes (dlls/zl_items.cpp)
+// Mappers can put any name here in a monster's / trigger_zmessage's / zl_sign's "message" key.
+
+@ZL_TEST BLACK BOTTOM
+Hey! {NAME}! Listen!
+This is the {RED}message box{WHITE} from
+{LIGHTBLUE}Ocarina of Time{WHITE}, running in
+{YELLOW}Half-Life{WHITE}.
+{BOX}
+Colours: {RED}red {GREEN}green {BLUE}blue
+{LIGHTBLUE}light blue {PURPLE}purple {YELLOW}yellow{WHITE}
+{INSTANT}This line appears at once.{/INSTANT}
+And this one types itself out.
+{BOX}
+Does it work?
+{GREEN}Yes, it works!
+No, it's broken...{CHOICE2}
+
+@ZL_TEST_WOOD WOODEN MIDDLE
+This is a {RED}wooden{BLACK} sign box.
+It closes by itself.{FADE:60}
+
+// ---------------------------------------------------------------------------
+// Scientists
+// ---------------------------------------------------------------------------
+
+@SC_IDLE#1
+Oh! You startled me! I thought
+you were one of those...
+{RED}things{WHITE}.
+{BOX}
+What on earth are you
+wearing? Is that a tunic?
+Very... medieval.
+
+@SC_IDLE#2
+The resonance cascade tore
+holes in space itself.
+Things are coming through
+from somewhere else.
+{BOX}
+...Somewhere like wherever
+{GREEN}you{WHITE} came from, I suspect.
+
+@SC_IDLE#3
+Please, keep your sword
+pointed {RED}away{WHITE} from me!
+I have three doctorates and
+no armor whatsoever.
+
+@SC_IDLE#4
+I was running a test on the
+anti-mass spectrometer when
+everything went wrong.
+{BOX}
+Now a boy in green is roaming
+the halls. I may need a
+long vacation.
+
+@SC_IDLE#5
+Have you seen my colleague?
+He went to the {YELLOW}cafeteria{WHITE} and
+never came back.
+{BOX}
+Probably just a long line.
+...Right?
+
+@SC_IDLE#6
+If you find a {GREEN}rupee{WHITE}, could
+I take a look at it? A naturally
+glowing gem is a marvel!
+{BOX}
+...No? Fine. Be like that.
+
+@SC_IDLE#7
+Those headcrabs leap at your
+face. Try holding your
+{LIGHTBLUE}shield{WHITE} up with {YELLOW}R{WHITE}!
+
+@SC_IDLE#8
+Press {YELLOW}Z{WHITE} to focus on whatever is
+in front of you. I find it
+helps me concentrate, too.
+
+@SC_FOLLOW_ASK
+You look like you know how to
+use that sword. Can I stay
+close to you?
+{BOX}
+Please say yes...
+{GREEN}Come with me.
+Stay here.{CHOICE2}
+
+@SC_STAY_ASK
+Is it safe to stop here?
+I'm not as fast as you are.
+{BOX}
+Should I wait for you?
+{GREEN}Wait here.
+Keep following me.{CHOICE2}
+
+// ---------------------------------------------------------------------------
+// Security guards
+// ---------------------------------------------------------------------------
+
+@BA_IDLE#1
+Hey, kid. Name's not on my
+list, but after today I've
+stopped checking lists.
+
+@BA_IDLE#2
+You ever hear of a gun? No?
+Well, that sword seems to be
+working out for you.
+
+@BA_IDLE#3
+I'll trade you a box of
+ammo for one of those
+{RED}bombs{WHITE}. Deal? No deal?
+{BOX}
+Worth a shot.
+
+@BA_IDLE#4
+Catch me a beer sometime.
+Do they have beer where
+you're from? Milk? Okay.
+
+@BA_IDLE#5
+Watch yourself past the next
+door. Something big's been
+making noises in there.
+
+@BA_IDLE#6
+If you see a guy in a suit
+with a briefcase, don't
+talk to him. Trust me.
+
+@BA_FOLLOW_ASK
+I've got your back, green.
+Want some backup?
+{BOX}
+I'm a pretty good shot.
+{GREEN}Let's go.
+Not right now.{CHOICE2}
+
+@BA_STAY_ASK
+Want me to hold this spot?
+{GREEN}Hold here.
+Keep moving.{CHOICE2}
+
+@NPC_IDLE
+...
+{BOX}
+It doesn't seem to want
+to talk.
+
+// ---------------------------------------------------------------------------
+// Items (dlls/zl_items.cpp sPickups)
+// ---------------------------------------------------------------------------
+
+@ITEM_BOW BLUE BOTTOM
+{SFX:NA_SE_SY_GET_ITEM}You got the {RED}Fairy Bow{WHITE}!
+Put it on a {YELLOW}C button{WHITE}. Hold the
+button to aim and let go to
+fire!
+
+@ITEM_BOMB_BAG BLUE BOTTOM
+{SFX:NA_SE_SY_GET_ITEM}You got a {RED}Bomb Bag{WHITE}!
+It holds {RED}20 Bombs{WHITE}. Press {YELLOW}C{WHITE} to
+pull one out, then {YELLOW}C{WHITE} or {LIGHTBLUE}A{WHITE}
+to throw it!
+
+@ITEM_HOOKSHOT BLUE BOTTOM
+{SFX:NA_SE_SY_GET_ITEM}You got the {RED}Hookshot{WHITE}!
+Hold {YELLOW}C{WHITE} to aim and let go to
+fire the chain. It pulls you
+to whatever it bites into!
+
+@ITEM_LONGSHOT BLUE BOTTOM
+{SFX:NA_SE_SY_GET_ITEM}You got the {RED}Longshot{WHITE}!
+The chain is now {RED}twice{WHITE} as
+long as the Hookshot's!
+
+@ITEM_HEART_CONTAINER BLUE BOTTOM
+{SFX:NA_SE_SY_GET_ITEM}You got a {RED}Heart Container{WHITE}!
+Your life energy grows by
+one heart and is fully
+restored!
+
+@ITEM_SMALL_KEY BLUE BOTTOM
+{SFX:NA_SE_SY_GET_ITEM}You found a {RED}Small Key{WHITE}!
+Use it to open a locked door
+somewhere in this facility.
+
+@ITEM_MASTER_SWORD BLUE BOTTOM
+{SFX:NA_SE_SY_GET_ITEM}You got the {RED}Master Sword{WHITE}!
+A blade to repel evil...
+and apparently aliens, too.
+
+@ITEM_HYLIAN_SHIELD BLUE BOTTOM
+{SFX:NA_SE_SY_GET_ITEM}You got the {RED}Hylian Shield{WHITE}!
+Hold {YELLOW}R{WHITE} to block attacks from
+the front. It won't burn,
+unlike the Deku Shield.
+
+@ITEM_MAGIC_METER BLUE BOTTOM
+{SFX:NA_SE_SY_GET_ITEM}You got {GREEN}magic power{WHITE}!
+Hold {YELLOW}B{WHITE} longer to unleash a
+{RED}Great Spin Attack{WHITE}!
+
+@ITEM_DOUBLE_DEFENSE BLUE BOTTOM
+{SFX:NA_SE_SY_GET_ITEM}Your defensive power is
+{RED}doubled{WHITE}! Damage you take
+is cut in half!
+
+// ---------------------------------------------------------------------------
+// Map examples
+// ---------------------------------------------------------------------------
+
+@SIGN_LAMBDA WOODEN BOTTOM
+{RED}Black Mesa Research Facility{BLACK}
+Sector C: Test Labs
+{BOX}
+Hazard suits are mandatory
+past this point. Tunics are
+not hazard suits.
+
+@SIGN_ZL_TEST WOODEN BOTTOM
+{RED}Zelda 64 test room{BLACK}
+Climb the ledges, Z-target the
+zombies, open the chest and
+talk to the scientist!
+
+@NAVI_HEY BLUE TOP
+{SFX:NA_SE_VO_NAVY_HEAR}Hey! Listen!
+Press {YELLOW}Z{WHITE} to target things,
+then {LIGHTBLUE}A{WHITE} to jump at them!{FADE:80}

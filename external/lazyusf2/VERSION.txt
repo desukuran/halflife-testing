@@ -1,0 +1,2 @@
+00d19c9b1e0ae4924d395310844a94d871743c89 Wed Nov 26 21:48:22 2025 +0100
+Source: https://github.com/derselbst/lazyusf2

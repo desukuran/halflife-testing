@@ -28,6 +28,7 @@
 #include "cbase.h"
 #include "saverestore.h"
 #include "player.h"
+#include "zl_player.h"
 #include "spectator.h"
 #include "client.h"
 #include "soundent.h"
@@ -198,7 +199,8 @@ void ClientPutInServer( edict_t *pEntity )
 
 	entvars_t *pev = &pEntity->v;
 
-	pPlayer = GetClassPtr((CBasePlayer *)pev);
+	// Zelda: Link is the player
+	pPlayer = GetClassPtr((CLinkPlayer *)pev);
 	pPlayer->SetCustomDecalFrames(-1); // Assume none;
 
 	// Allocate a CBasePlayer for pev, and call spawn
@@ -592,6 +594,10 @@ void ClientCommand( edict_t *pEntity )
 		if ( pPlayer->IsObserver() )
 			pPlayer->Observer_FindNextPlayer( atoi( CMD_ARGV(1) )?true:false );
 	}
+	else if ( ZL_ClientCommand( GetClassPtr((CBasePlayer *)pev), pcmd ) )
+	{
+		// Zelda commands (zmsg_done, zl_equip, ...)
+	}
 	else if ( g_pGameRules->ClientCommand( GetClassPtr((CBasePlayer *)pev), pcmd ) )
 	{
 		// MenuSelect returns true only if the command is properly handled,  so don't print a warning
@@ -808,6 +814,9 @@ void ClientPrecache( void )
 {
 	// setup precaches always needed
 	PRECACHE_SOUND("player/sprayer.wav");			// spray paint sound for PreAlpha
+
+	// Zelda: Link's sounds, item models
+	ZL_PrecacheAll();
 	
 	// PRECACHE_SOUND("player/pl_jumpland2.wav");		// UNDONE: play 2x step sound
 	
@@ -1715,6 +1724,12 @@ void UpdateClientData ( const edict_t *ent, int sendweapons, struct clientdata_s
 	cd->weaponanim		= pev->weaponanim;
 
 	cd->pushmsec		= pev->pushmsec;
+
+	// Zelda: Link's predicted state (pm_shared/zl_shared.h), added to clientdata_t in zelda/delta.lst
+	cd->fuser1			= pev->fuser1;
+	cd->fuser4			= pev->fuser4;
+	cd->iuser3			= pev->iuser3;
+	cd->iuser4			= pev->iuser4;
 
 	//Spectator mode
 	if ( pevOrg != NULL )

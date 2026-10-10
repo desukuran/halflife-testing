@@ -3,6 +3,7 @@
 #include <memory.h>
 
 #include "hud.h"
+#include "zl_client.h"
 #include "cl_util.h"
 #include "const.h"
 #include "entity_types.h"
@@ -32,6 +33,13 @@ HUD_AddEntity
 */
 int CL_DLLEXPORT HUD_AddEntity( int type, struct cl_entity_s *ent, const char *modelname )
 {
+	// Zelda: Link flickers during invincibility frames
+	if ( ZL_IsLink() && ent == gEngfuncs.GetLocalPlayer() && ( ZL_PredictedFlags() & ZSF_INVULN ) )
+	{
+		if ( (int)( gEngfuncs.GetClientTime() * 20.0f ) & 1 )
+			return 0;
+	}
+
 //	RecClAddEntity(type, ent, modelname);
 
 	switch ( type )
@@ -200,8 +208,8 @@ void CL_DLLEXPORT HUD_TxferPredictionData ( struct entity_state_s *ps, const str
 	pcd->iuser1					= ppcd->iuser1;
 	pcd->iuser2					= ppcd->iuser2;
 
-	// Duck prevention
-	pcd->iuser3 = ppcd->iuser3;
+	// Zelda: iuser3 / iuser4 carry Link's state from the server (pm_shared/zl_shared.h),
+	// so they are not copied from the predicted frame (was duck / fire prevention)
 
 	if ( gEngfuncs.IsSpectateOnly() )
 	{
@@ -212,8 +220,6 @@ void CL_DLLEXPORT HUD_TxferPredictionData ( struct entity_state_s *ps, const str
 		pcd->iuser3 = g_iUser3; // second target
 	}
 
-	// Fire prevention
-	pcd->iuser4 = ppcd->iuser4;
 
 	pcd->fuser2					= ppcd->fuser2;
 	pcd->fuser3					= ppcd->fuser3;

@@ -28,6 +28,8 @@
 #include "decals.h"
 #include "animation.h"
 #include "weapons.h"
+
+void ZL_MonsterKilled( CBaseMonster *pMonster, entvars_t *pevAttacker );	// zl_combat.cpp
 #include "func_break.h"
 
 extern DLL_GLOBAL Vector		g_vecAttackDir;
@@ -601,6 +603,9 @@ void CBaseMonster :: Killed( entvars_t *pevAttacker, int iGib )
 	}
 
 	Remember( bits_MEMORY_KILLED );
+
+	// Zelda: rupees and hearts pop out (Item_DropCollectibleRandom)
+	ZL_MonsterKilled( this, pevAttacker );
 
 	// clear the deceased's sound channels.(may have been firing or reloading when killed)
 	EMIT_SOUND(ENT(pev), CHAN_WEAPON, "common/null.wav", 1, ATTN_NORM);

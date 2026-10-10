@@ -109,6 +109,433 @@ call ..\..\filecopy.bat $(TargetDir)\$(TargetName).pdb ..\..\..\game\mod\cl_dlls
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\cl_dll\zl_camera.cpp" />
+    <ClCompile Include="..\..\cl_dll\zl_draw.cpp" />
+    <ClCompile Include="..\..\cl_dll\zl_hud.cpp" />
+    <ClCompile Include="..\..\cl_dll\zl_input.cpp" />
+    <ClCompile Include="..\..\cl_dll\zl_music.cpp" />
+    <ClCompile Include="..\..\cl_dll\zl_textbox.cpp" />
+    <ClCompile Include="..\..\pm_shared\pm_zelda.c" />
+    <ClCompile Include="..\..\external\lazyusf2\ai\ai_controller.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_ai_ai_controller.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\api\callbacks.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_api_callbacks.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\debugger\dbg_decoder.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_debugger_dbg_decoder.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\main\main.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_main_main.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\main\rom.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_main_rom.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\main\savestates.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_main_savestates.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\main\util.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_main_util.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\memory\memory.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_memory_memory.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\pi\cart_rom.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_pi_cart_rom.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\pi\pi_controller.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_pi_pi_controller.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\r4300\cached_interp.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_r4300_cached_interp.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\r4300\cp0.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_r4300_cp0.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\r4300\cp1.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_r4300_cp1.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\r4300\exception.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_r4300_exception.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\r4300\interupt.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_r4300_interupt.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\r4300\mi_controller.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_r4300_mi_controller.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\r4300\pure_interp.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_r4300_pure_interp.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\r4300\r4300.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_r4300_r4300.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\r4300\r4300_core.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_r4300_r4300_core.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\r4300\recomp.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_r4300_recomp.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\r4300\reset.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_r4300_reset.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\r4300\tlb.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_r4300_tlb.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\r4300\empty_dynarec.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_r4300_empty_dynarec.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\rdp\rdp_core.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_rdp_rdp_core.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\ri\rdram.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_ri_rdram.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\ri\rdram_detection_hack.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_ri_rdram_detection_hack.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\ri\ri_controller.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_ri_ri_controller.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\rsp\rsp_core.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_rsp_rsp_core.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\rsp_hle\alist.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_rsp_hle_alist.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\rsp_hle\alist_audio.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_rsp_hle_alist_audio.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\rsp_hle\alist_naudio.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_rsp_hle_alist_naudio.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\rsp_hle\alist_nead.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_rsp_hle_alist_nead.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\rsp_hle\audio.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_rsp_hle_audio.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\rsp_hle\cicx105.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_rsp_hle_cicx105.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\rsp_hle\hle.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_rsp_hle_hle.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\rsp_hle\hvqm.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_rsp_hle_hvqm.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\rsp_hle\jpeg.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_rsp_hle_jpeg.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\rsp_hle\memory.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_rsp_hle_memory.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\rsp_hle\mp3.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_rsp_hle_mp3.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\rsp_hle\musyx.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_rsp_hle_musyx.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\rsp_hle\plugin.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_rsp_hle_plugin.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\rsp_hle\re2.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_rsp_hle_re2.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\rsp_lle\rsp.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_rsp_lle_rsp.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\si\cic.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_si_cic.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\si\game_controller.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_si_game_controller.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\si\n64_cic_nus_6105.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_si_n64_cic_nus_6105.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\si\pif.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_si_pif.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\si\si_controller.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_si_si_controller.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\usf\usf.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_usf_usf.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\usf\barray.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_usf_barray.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\usf\resampler.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_usf_resampler.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\lazyusf2\vi\vi_controller.c">
+      <ObjectFileName>$(IntDir)zlext_lazyusf2_vi_vi_controller.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\psflib\psflib.c">
+      <ObjectFileName>$(IntDir)zlext_psflib_psflib.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\zlib\adler32.c">
+      <ObjectFileName>$(IntDir)zlext_zlib_adler32.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\zlib\crc32.c">
+      <ObjectFileName>$(IntDir)zlext_zlib_crc32.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\zlib\inffast.c">
+      <ObjectFileName>$(IntDir)zlext_zlib_inffast.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\zlib\inflate.c">
+      <ObjectFileName>$(IntDir)zlext_zlib_inflate.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\zlib\inftrees.c">
+      <ObjectFileName>$(IntDir)zlext_zlib_inftrees.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\zlib\uncompr.c">
+      <ObjectFileName>$(IntDir)zlext_zlib_uncompr.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <ClCompile Include="..\..\external\zlib\zutil.c">
+      <ObjectFileName>$(IntDir)zlext_zlib_zutil.obj</ObjectFileName>
+      <AdditionalIncludeDirectories>..\..\external\lazyusf2;..\..\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
     <ClCompile Include="..\..\cl_dll\ammo.cpp" />
     <ClCompile Include="..\..\cl_dll\ammohistory.cpp" />
     <ClCompile Include="..\..\cl_dll\ammo_secondary.cpp" />
@@ -194,6 +621,11 @@ call ..\..\filecopy.bat $(TargetDir)\$(TargetName).pdb ..\..\..\game\mod\cl_dlls
     <ClCompile Include="..\..\public\interface.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\cl_dll\zl_client.h" />
+    <ClInclude Include="..\..\cl_dll\zl_fontwidths.h" />
+    <ClInclude Include="..\..\pm_shared\zl_shared.h" />
+    <ClInclude Include="..\..\pm_shared\zl_sounds.h" />
+    <ClInclude Include="..\..\pm_shared\pm_zelda.h" />
     <ClInclude Include="..\..\cl_dll\ammo.h" />
     <ClInclude Include="..\..\cl_dll\ammohistory.h" />
     <ClInclude Include="..\..\cl_dll\camera.h" />

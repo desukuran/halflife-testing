@@ -22,6 +22,8 @@
 #include "pm_shared.h"
 #include "pm_movevars.h"
 #include "pm_debug.h"
+#include "zl_shared.h"
+#include "pm_zelda.h"
 #include <stdio.h>  // NULL
 #include <math.h>   // sqrt
 #include <string.h> // strcpy
@@ -3138,8 +3140,20 @@ void PM_PlayerMove ( qboolean server )
 
 		// Not underwater
 		{
+			qboolean linkMove = PMZ_Active();
+
+			if ( linkMove )
+			{
+				// Zelda: Link's actions own horizontal velocity and the A button (no HL jump)
+				if ( PMZ_Think() )
+				{
+					PM_CatagorizePosition();
+					PMZ_PostMove();
+					break;
+				}
+			}
 			// Was jump button pressed?
-			if ( pmove->cmd.buttons & IN_JUMP )
+			else if ( pmove->cmd.buttons & IN_JUMP )
 			{
 				if ( !pLadder )
 				{
@@ -3156,7 +3170,8 @@ void PM_PlayerMove ( qboolean server )
 			if ( pmove->onground != -1 )
 			{
 				pmove->velocity[2] = 0.0;
-				PM_Friction();
+				if ( !linkMove )
+					PM_Friction();
 			}
 
 			// Make sure velocity is valid.
@@ -3198,6 +3213,9 @@ void PM_PlayerMove ( qboolean server )
 			// See if we landed on the ground with enough force to play
 			//  a landing sound.
 			PM_CheckFalling();
+
+			if ( linkMove )
+				PMZ_PostMove();
 		}
 
 		// Did we enter or leave the water?
@@ -3328,8 +3346,10 @@ void PM_Move ( struct playermove_s *ppmove, int server )
 	assert( pm_shared_initialized );
 
 	pmove = ppmove;
-	
+
+	PMZ_Begin();
 	PM_PlayerMove( ( server != 0 ) ? true : false );
+	PMZ_End();
 
 	if ( pmove->onground != -1 )
 	{

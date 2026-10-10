@@ -249,7 +249,7 @@ public:
 	void DeathSound ( void );
 
 	int Classify ( void );
-	void SetAnimation( PLAYER_ANIM playerAnim );
+	virtual void SetAnimation( PLAYER_ANIM playerAnim );
 	void SetWeaponAnimType( const char *szExtention );
 	char m_szAnimExtention[32];
 

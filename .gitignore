@@ -1,0 +1,32 @@
+# Linux build output (linux/Makefile)
+linux/release/obj/
+linux/release/*.so
+linux/release/*.dbg
+!linux/release/vgui.so
+linux/*_map.txt
+
+# Visual Studio build output
+projects/vs2019/Debug/
+projects/vs2019/Release/
+projects/vs2019/.vs/
+*.user
+
+# Zelda 64 port: anything that comes out of YOUR OoT ROM stays on your machine.
+zelda/sprites/oot/
+zelda/resource/zl_oot_messages.txt
+zelda/sound/zelda/oot/*.wav
+zelda/music/**/*.miniusf
+zelda/music/**/*.usf
+zelda/music/**/*.usflib
+zelda/music/**/*.wav
+zelda/models/player/link/*.mdl
+zelda/models/player/link/*.smd
+zelda/maps/*.bsp
+
+# Built libraries copied into the mod folder
+zelda/dlls/
+zelda/cl_dlls/
+
+# Python
+__pycache__/
+*.pyc

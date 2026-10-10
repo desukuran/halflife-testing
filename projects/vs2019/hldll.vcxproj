@@ -105,6 +105,15 @@ call ..\..\filecopy.bat $(TargetDir)\$(TargetName).pdb ..\..\..\game\mod\dlls\$(
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\dlls\zl_anim.cpp" />
+    <ClCompile Include="..\..\dlls\zl_combat.cpp" />
+    <ClCompile Include="..\..\dlls\zl_items.cpp" />
+    <ClCompile Include="..\..\dlls\zl_message.cpp" />
+    <ClCompile Include="..\..\dlls\zl_music.cpp" />
+    <ClCompile Include="..\..\dlls\zl_player.cpp" />
+    <ClCompile Include="..\..\dlls\zl_sound.cpp" />
+    <ClCompile Include="..\..\dlls\zl_targeting.cpp" />
+    <ClCompile Include="..\..\pm_shared\pm_zelda.c" />
     <ClCompile Include="..\..\dlls\aflock.cpp" />
     <ClCompile Include="..\..\dlls\agrunt.cpp" />
     <ClCompile Include="..\..\dlls\airtank.cpp" />
@@ -209,6 +218,10 @@ call ..\..\filecopy.bat $(TargetDir)\$(TargetName).pdb ..\..\..\game\mod\dlls\$(
     <ClCompile Include="..\..\pm_shared\pm_shared.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\dlls\zl_player.h" />
+    <ClInclude Include="..\..\pm_shared\zl_shared.h" />
+    <ClInclude Include="..\..\pm_shared\zl_sounds.h" />
+    <ClInclude Include="..\..\pm_shared\pm_zelda.h" />
     <ClInclude Include="..\..\dlls\activity.h" />
     <ClInclude Include="..\..\dlls\activitymap.h" />
     <ClInclude Include="..\..\dlls\animation.h" />

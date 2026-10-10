@@ -17,6 +17,8 @@
 #include "util.h"
 #include "game.h"
 
+void ZL_RegisterCvars( void );	// zl_player.cpp
+
 cvar_t	displaysoundlist = {"displaysoundlist","0"};
 
 // multiplayer server rules
@@ -467,6 +469,9 @@ void GameDLLInit( void )
 	g_footsteps = CVAR_GET_POINTER( "mp_footsteps" );
 
 	CVAR_REGISTER (&displaysoundlist);
+
+	// Zelda
+	ZL_RegisterCvars();
 	CVAR_REGISTER( &allow_spectators );
 
 	CVAR_REGISTER (&teamplay);

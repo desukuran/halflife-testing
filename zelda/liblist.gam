@@ -1,0 +1,12 @@
+// Zelda 64: Half-Life
+// Link from Ocarina of Time in Half-Life. Maps, models and sounds come from the valve folder.
+game "Zelda 64: Half-Life"
+startmap "c0a0"
+trainmap "t0a0"
+mpentity "info_player_deathmatch"
+gamedll "dlls\hl.dll"
+gamedll_linux "dlls/hl.so"
+gamedll_osx "dlls/hl.dylib"
+secure "0"
+type "singleplayer_only"
+cldll "1"

@@ -29,6 +29,8 @@
 #include "items.h"
 #include "gamerules.h"
 
+BOOL ZL_BatteryPickup( CBasePlayer *pPlayer );	// zl_items.cpp
+
 extern int gmsgItemPickup;
 
 class CWorldItem : public CBaseEntity
@@ -221,6 +223,10 @@ class CItemBattery : public CItem
 		{
 			return FALSE;
 		}
+
+		// Zelda: batteries are small magic jars for Link (or five rupees without a magic meter)
+		if ( ZL_BatteryPickup( pPlayer ) )
+			return TRUE;
 
 		if ((pPlayer->pev->armorvalue < MAX_NORMAL_BATTERY) &&
 			(pPlayer->pev->weapons & (1<<WEAPON_SUIT)))

@@ -1,0 +1,106 @@
+// Zelda 64: Half-Life entities. Load this together with the stock halflife.fgd in J.A.C.K. /
+// Hammer / TrenchBroom.
+//
+// Any monster (monster_scientist, monster_barney, ...) can be given a "message" key with
+// a name from zelda/resource/zl_messages.txt; Link reads it to them when he presses A.
+
+@BaseClass = ZTargetname [ targetname(target_source) : "Name" ]
+@BaseClass = ZTarget [ target(target_destination) : "Target" ]
+
+@BaseClass base(ZTargetname, ZTarget) size(-12 -12 0, 12 12 24) color(0 200 0) = ZPickup
+[
+	spawnflags(flags) = []
+]
+
+// ---------------------------------------------------------------------------
+// Collectibles (EnItem00)
+// ---------------------------------------------------------------------------
+@PointClass base(ZPickup) studio("models/w_battery.mdl") = item_zl_rupee : "Green rupee (1)" []
+@PointClass base(ZPickup) studio("models/w_battery.mdl") = item_zl_rupee_blue : "Blue rupee (5)" []
+@PointClass base(ZPickup) studio("models/w_battery.mdl") = item_zl_rupee_red : "Red rupee (20)" []
+@PointClass base(ZPickup) studio("models/w_battery.mdl") = item_zl_rupee_purple : "Purple rupee (50)" []
+@PointClass base(ZPickup) studio("models/w_medkit.mdl") = item_zl_heart : "Recovery heart" []
+@PointClass base(ZPickup) studio("models/w_crossbow_clip.mdl") = item_zl_arrows : "Arrows (10)" []
+@PointClass base(ZPickup) studio("models/w_grenade.mdl") = item_zl_bombs : "Bombs (5)" []
+@PointClass base(ZPickup) studio("models/w_battery.mdl") = item_zl_nuts : "Deku Nuts (5)" []
+@PointClass base(ZPickup) studio("models/w_antidote.mdl") = item_zl_magic : "Small magic jar" []
+@PointClass base(ZPickup) studio("models/w_antidote.mdl") = item_zl_magic_large : "Large magic jar" []
+
+// ---------------------------------------------------------------------------
+// Major items (item get fanfare + text box)
+// ---------------------------------------------------------------------------
+@PointClass base(ZPickup) studio("models/w_medkit.mdl") = item_zl_heartcontainer : "Heart Container" []
+@PointClass base(ZPickup) studio("models/w_security.mdl") = item_zl_key : "Small Key" []
+@PointClass base(ZPickup) studio("models/w_crossbow.mdl") = item_zl_bow : "Fairy Bow" []
+@PointClass base(ZPickup) studio("models/w_satchel.mdl") = item_zl_bombbag : "Bomb Bag" []
+@PointClass base(ZPickup) studio("models/w_357.mdl") = item_zl_hookshot : "Hookshot" []
+@PointClass base(ZPickup) studio("models/w_357.mdl") = item_zl_longshot : "Longshot" []
+@PointClass base(ZPickup) studio("models/w_crowbar.mdl") = item_zl_mastersword : "Master Sword" []
+@PointClass base(ZPickup) studio("models/w_weaponbox.mdl") = item_zl_hylianshield : "Hylian Shield" []
+@PointClass base(ZPickup) studio("models/w_antidote.mdl") = item_zl_magicmeter : "Magic meter (Great Fairy)" []
+@PointClass base(ZPickup) studio("models/w_medkit.mdl") = item_zl_doubledefense : "Double defense (Great Fairy)" []
+
+// ---------------------------------------------------------------------------
+// Chests, signs, text
+// ---------------------------------------------------------------------------
+@PointClass base(ZTargetname, ZTarget) size(-20 -14 0, 20 14 28) studio("models/w_weaponbox.mdl") = zl_chest : "Treasure chest (open with A)"
+[
+	item(choices) : "Item inside" : "item_zl_rupee_red" =
+	[
+		"item_zl_rupee_blue" : "Blue rupee"
+		"item_zl_rupee_red" : "Red rupee"
+		"item_zl_rupee_purple" : "Purple rupee"
+		"item_zl_heartcontainer" : "Heart Container"
+		"item_zl_key" : "Small Key"
+		"item_zl_bow" : "Fairy Bow"
+		"item_zl_bombbag" : "Bomb Bag"
+		"item_zl_hookshot" : "Hookshot"
+		"item_zl_longshot" : "Longshot"
+		"item_zl_mastersword" : "Master Sword"
+		"item_zl_hylianshield" : "Hylian Shield"
+		"item_zl_magicmeter" : "Magic meter"
+	]
+	model(studio) : "Model (blank = default)" : ""
+	scale(string) : "Scale" : "1.6"
+]
+
+@PointClass base(ZTargetname, ZTarget) size(-16 -16 0, 16 16 48) color(150 100 50) = zl_sign : "Sign / anything to read with A (Check)"
+[
+	message(string) : "Message name (zl_messages.txt)" : "SIGN_ZL_TEST"
+]
+
+@SolidClass base(ZTargetname, ZTarget) = func_zl_sign : "Brush sign to read with A (Check)"
+[
+	message(string) : "Message name (zl_messages.txt)" : "SIGN_ZL_TEST"
+]
+
+@PointClass base(ZTargetname, ZTarget) size(-8 -8 -8, 8 8 8) color(80 80 255) = trigger_zmessage : "Show an OoT text box when triggered. Target fires when it closes (USE_ON for the first choice, USE_OFF otherwise)."
+[
+	message(string) : "Message name (zl_messages.txt)" : "NAVI_HEY"
+	spawnflags(flags) =
+	[
+		1 : "Only once" : 0
+	]
+]
+
+// ---------------------------------------------------------------------------
+// Music (client side lazyusf2 / wav)
+// ---------------------------------------------------------------------------
+@PointClass base(ZTargetname) size(-8 -8 -8, 8 8 8) color(255 200 0) iconsprite("sprites/speaker.spr") = ambient_zmusic : "OoT music track"
+[
+	track(string) : "Track (relative to the mod folder)" : "music/oot/kokiri_forest.miniusf"
+	fadein(string) : "Fade in (seconds)" : "0"
+	fadeout(string) : "Fade out when stopped (seconds)" : "2"
+	volume(integer) : "Volume (0-10)" : 10
+	spawnflags(flags) =
+	[
+		1 : "Play on level start" : 1
+		2 : "Don't loop" : 0
+		4 : "Toggle when triggered" : 0
+	]
+]
+
+@PointClass base(ZTargetname) size(-8 -8 -8, 8 8 8) color(255 120 0) = trigger_zmusic_stop : "Fade out the music when triggered"
+[
+	fadeout(string) : "Fade out (seconds)" : "2"
+]

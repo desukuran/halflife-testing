@@ -30,6 +30,7 @@
 #include "../hud_iface.h"
 #include "../com_weapons.h"
 #include "../demo.h"
+#include "../zl_client.h"
 
 extern globalvars_t *gpGlobals;
 extern int g_iUser1;
@@ -1062,7 +1063,15 @@ void CL_DLLEXPORT HUD_PostRunCmd( struct local_state_s *from, struct local_state
 #if defined( CLIENT_WEAPONS )
 	if ( cl_lw && cl_lw->value )
 	{
-		HUD_WeaponsPostThink( from, to, cmd, time, random_seed );
+		if ( ZL_IsLink() )
+		{
+			// Zelda: B is the sword; only a C button with a Half-Life weapon on it fires
+			usercmd_t zcmd = *cmd;
+			zcmd.buttons = ZInput_TranslateWeaponButtons( zcmd.buttons );
+			HUD_WeaponsPostThink( from, to, &zcmd, time, random_seed );
+		}
+		else
+			HUD_WeaponsPostThink( from, to, cmd, time, random_seed );
 	}
 	else
 #endif

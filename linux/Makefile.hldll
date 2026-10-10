@@ -129,7 +129,15 @@ HLDLL_OBJS = \
 	$(HLDLL_OBJ_DIR)/weapons.o \
 	$(HLDLL_OBJ_DIR)/world.o \
 	$(HLDLL_OBJ_DIR)/xen.o \
-	$(HLDLL_OBJ_DIR)/zombie.o
+	$(HLDLL_OBJ_DIR)/zombie.o \
+	$(HLDLL_OBJ_DIR)/zl_anim.o \
+	$(HLDLL_OBJ_DIR)/zl_combat.o \
+	$(HLDLL_OBJ_DIR)/zl_items.o \
+	$(HLDLL_OBJ_DIR)/zl_message.o \
+	$(HLDLL_OBJ_DIR)/zl_music.o \
+	$(HLDLL_OBJ_DIR)/zl_player.o \
+	$(HLDLL_OBJ_DIR)/zl_sound.o \
+	$(HLDLL_OBJ_DIR)/zl_targeting.o
 
 HLWPN_OBJS = \
 	$(HLWPN_OBJ_DIR)/hl_wpn_glock.o
@@ -137,7 +145,8 @@ HLWPN_OBJS = \
 PM_OBJS = \
 	$(PM_OBJ_DIR)/pm_shared.o \
 	$(PM_OBJ_DIR)/pm_math.o \
-	$(PM_OBJ_DIR)/pm_debug.o
+	$(PM_OBJ_DIR)/pm_debug.o \
+	$(PM_OBJ_DIR)/pm_zelda.o
 
 GAME_SHARED_OBJS = \
 	$(GAME_SHARED_OBJ_DIR)/voice_gamemgr.o

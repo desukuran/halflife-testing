@@ -6,6 +6,7 @@
 //=============================================================================
 
 #include "hud.h"
+#include "zl_client.h"
 #include "cl_util.h"
 #include "camera.h"
 #include "kbutton.h"
@@ -619,6 +620,10 @@ void CAM_EndDistance(void)
 int CL_DLLEXPORT CL_IsThirdPerson( void )
 {
 //	RecClCL_IsThirdPerson();
+
+	// Zelda: the OoT camera is third person unless aiming / looking in first person
+	if ( ZCam_IsThirdPerson() )
+		return 1;
 
 	return (cam_thirdperson ? 1 : 0) || (g_iUser1 && (g_iUser2 == gEngfuncs.GetLocalPlayer()->index) );
 }

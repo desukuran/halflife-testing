@@ -19,6 +19,10 @@
 //
 
 #include "hud.h"
+#include "zl_client.h"
+
+void ZHud_Init( void );
+void ZHud_VidInit( void );
 #include "cl_util.h"
 #include <string.h>
 #include <stdio.h>
@@ -369,6 +373,11 @@ void CHud :: Init( void )
 	GetClientVoiceMgr()->Init(&g_VoiceStatusHelper, (vgui::Panel**)&gViewPort);
 
 	m_Menu.Init();
+
+	// Zelda HUD, text box, camera
+	ZHud_Init();
+	ZCam_Init();
+	ZMusic_Init();
 	
 	ServersInit();
 
@@ -419,6 +428,8 @@ int CHud :: GetSpriteIndex( const char *SpriteName )
 
 void CHud :: VidInit( void )
 {
+	ZHud_VidInit();
+
 	m_scrinfo.iSize = sizeof(m_scrinfo);
 	GetScreenInfo(&m_scrinfo);
 
