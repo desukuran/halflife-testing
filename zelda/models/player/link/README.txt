@@ -1,5 +1,6 @@
-link.mdl goes here once it is built from your ROM (see docs/ZELDA_PORT.md, "Link's model").
-Then: zl_model "models/player/link/link.mdl" and restart the map.
+link.mdl goes here. Build it from your own ROM with tools/zelda/make_link_model.py
+(see docs/ZELDA_PORT.md, "Link's model"). zl_model already points here; without the file the
+game uses models/player.mdl.
 
 Sequence names in link.mdl are the OoT animation names without the gPlayerAnim_ prefix
 (link_normal_wait, link_normal_landing_roll, link_fighter_Lside_kiru ...). dlls/zl_anim.cpp

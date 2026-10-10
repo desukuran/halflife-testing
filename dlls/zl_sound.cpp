@@ -41,6 +41,28 @@ void CLinkPlayer::ZSound( int channel, int sound, float volume, float attn, int 
 }
 
 // Called from ClientPrecache (world spawn), the only time precaching is allowed
+// Precaching a model that isn't there is fatal, and link.mdl only exists once you have built it
+// from your own ROM (tools/zelda/make_link_model.py)
+const char *ZL_PlayerModel( void )
+{
+	static char checked[128];
+	static BOOL exists;
+	const char *want = ( zl_model.string && zl_model.string[0] ) ? zl_model.string : "models/player.mdl";
+
+	if ( strcmp( checked, want ) )
+	{
+		int len = 0;
+		byte *data = LOAD_FILE_FOR_ME( (char *)want, &len );
+		exists = data != NULL;
+		if ( data )
+			FREE_FILE( data );
+		strncpy( checked, want, sizeof( checked ) - 1 );
+		if ( !exists )
+			ALERT( at_console, "Zelda: %s not found, using models/player.mdl\n", want );
+	}
+	return exists ? want : "models/player.mdl";
+}
+
 void ZL_PrecacheAll( void )
 {
 	if ( !ZL_Enabled() )
@@ -49,8 +71,7 @@ void ZL_PrecacheAll( void )
 	for ( int i = 0; i < ZS_COUNT; i++ )
 		PRECACHE_SOUND( (char *)ZL_SoundPath( i ) );
 
-	if ( zl_model.string && zl_model.string[0] )
-		PRECACHE_MODEL( (char *)zl_model.string );
+	PRECACHE_MODEL( (char *)ZL_PlayerModel() );
 
 	ZL_PrecacheItems();
 }

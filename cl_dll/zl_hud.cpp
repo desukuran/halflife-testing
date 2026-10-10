@@ -48,6 +48,20 @@ int ZL_IsLink( void )
 	return ( ZL_PredictedFlags() & ZSF_ACTIVE ) != 0 && g_zl.active;
 }
 
+// In single player the engine draws the player with models/player.mdl whatever the server
+// set. When the server gave Link his own model (zl_model), draw that one instead.
+struct model_s *ZL_PlayerModelOverride( cl_entity_t *ent )
+{
+	if ( !ent || !ent->model || !ZL_IsLink() )
+		return NULL;
+	cl_entity_t *local = gEngfuncs.GetLocalPlayer();
+	if ( !local || ent->index != local->index )
+		return NULL;
+	if ( ent->model->type != mod_studio || !strcmp( ent->model->name, "models/player.mdl" ) )
+		return NULL;
+	return ent->model;
+}
+
 int ZL_PredictedState( void )
 {
 	return g_pmzPredicted.valid ? g_pmzPredicted.state : 0;

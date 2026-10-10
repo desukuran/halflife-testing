@@ -57,7 +57,7 @@ Equip items with `zl_equip <0|1|2> <item number>` (C-left, C-down, C-right; item
 | `zl_dmg_in_scale` | 0.8 | HL damage × this ÷ 4, rounded up to whole quarter hearts (minimum ¼ heart, maximum 4 hearts). |
 | `zl_dmg_out_scale` | 10 | OoT damage (sword 1/2/4, ...) × this = HL damage dealt to monsters. |
 | `zl_ztoggle` | 0 | Z-targeting: 0 = hold (OoT "Hold"), 1 = toggle (OoT "Switch"). |
-| `zl_model` | `models/player.mdl` | Player model. Set it to `models/player/link/link.mdl` once that model is built. |
+| `zl_model` | `models/player/link/link.mdl` | Player model. If the file doesn't exist (you haven't built it yet), `models/player.mdl` is used. |
 | `zl_sfx_oot` | 0 | 1 = play the OoT `.wav` files from `sound/zelda/oot/` instead of the HL stand-ins. |
 | `zl_hl_suit` | 0 | 1 = also give the HEV suit (HL HUD and voice). |
 | `zl_drops` | 1 | Monsters drop hearts, rupees and ammo when killed. |
@@ -178,7 +178,7 @@ Outgoing damage goes the other way through `ZL_OoTDamageToHL`:
 
 Half-Life has no Link, so every action has a Half-Life `player.mdl` stand-in, and the comment names the real `gPlayerAnim_*`.
 
-If `zl_model` points at a model that has the `link_*` sequence names (see [Roadmap](#roadmap)), those are used automatically. Playback rate is fitted to the length of each action.
+If `zl_model` points at a model that has the `link_*` sequence names (see [Link's model](#links-model)), those are used automatically. Playback rate is fitted to the length of each action.
 
 | Action | OoT animation (link.mdl sequence) | Half-Life player.mdl stand-in | Legs |
 |---|---|---|---|
@@ -338,6 +338,33 @@ python3 tools/zelda/convert_sfx.py --in my_wavs --out zelda/sound/zelda/oot
 
 The `length` and `fade` tags are honoured; a track loops unless flag 2 is set. A `.wav` works too.
 
+### Link's model
+
+```sh
+python3 tools/zelda/make_link_model.py --oot /path/to/oot --studiomdl /path/to/studiomdl --preview
+```
+
+This converts adult Link from the decomp's extracted assets:
+
+- **Skeleton:** `gLinkAdultSkel`, 21 limbs, becomes 21 bones.
+- **Mesh:** each limb's near display list, run through a small F3DEX2 interpreter.
+  - Vertices are skinned to whichever limb matrix was loaded when they were (OoT stitches joints by loading a few vertices under the parent's matrix).
+  - The colour combiner's PRIMITIVE / ENVIRONMENT colours are baked into the textures. The tunic is Kokiri green; `--tunic goron|zora` changes it.
+  - Mirrored texture axes are unrolled into double-size textures.
+  - Faces drawn with culling off get a back face.
+  - Environment-mapped (`G_TEXTURE_GEN`) parts become HL chrome.
+- **Animations:** the `gPlayerAnim_*` the game uses, at 20 fps. `--all-anims` converts all 573.
+  - Sequence names are the OoT names without `gPlayerAnim_`, cut to 31 characters.
+- **Bodygroups:** the hands and sheath, following OoT's `gPlayerModelTypes`. The server switches them:
+  - sword and shield in hand after attacking, until A "Put Away"
+  - shield in hand while holding R
+  - the bow or hookshot while aiming or Z-targeting with it
+- **Skins:** eyes open / half / closed, which the server cycles to blink.
+
+The output goes to `tools/zelda/build/link/` (SMD, BMP, QC, `preview.png`) and `zelda/models/player/link/link.mdl`. Both are git ignored.
+
+To compile on Windows without `--studiomdl`, run `studiomdl link.qc` from the SDK's `utils/studiomdl` build, or use Crowbar. In single player the client draws Link with the model the server set, not the `model` userinfo key.
+
 ### Test map
 
 `tools/zelda/make_test_map.py` writes `zelda/maps/zl_test.map`. Compile it with VHLT:
@@ -365,7 +392,7 @@ The room contains:
 
 ## Roadmap
 
-1. **Link model.** Write a converter from the decomp's `object_link_boy` / `object_link_child` display lists, skeleton (`gLinkAdultSkel`) and `link_animetion` frame data to SMD, then compile `models/player/link/link.mdl` with studiomdl.
+1. **Link model.** Done for adult Link (`make_link_model.py`). Still to do: child Link (`object_link_child`), the animated face (each animation frame carries an eye/mouth index), and the Goron/Zora tunics as skins.
    - The sequence names must match the `link.mdl` column above. `zl_anim.cpp` picks them up automatically.
    - Blender is useful for checking the skeleton and for any cleanup.
 2. **SFX extraction.** Pull the effects straight from the extracted audio banks instead of recording them by hand.

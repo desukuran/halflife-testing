@@ -23,7 +23,7 @@ cvar_t zl_enable		= { "zl_enable", "1", FCVAR_SERVER };
 cvar_t zl_dmg_in_scale	= { "zl_dmg_in_scale", "0.8", FCVAR_SERVER };	// HL damage -> OoT health units
 cvar_t zl_dmg_out_scale	= { "zl_dmg_out_scale", "10", FCVAR_SERVER };	// OoT damage -> HL damage
 cvar_t zl_ztoggle		= { "zl_ztoggle", "0", FCVAR_ARCHIVE };		// OoT options menu: Z Target "Switch" instead of "Hold"
-cvar_t zl_model			= { "zl_model", "models/player.mdl", FCVAR_ARCHIVE };	// models/player/link/link.mdl once built
+cvar_t zl_model			= { "zl_model", "models/player/link/link.mdl", FCVAR_ARCHIVE };	// tools/zelda/make_link_model.py builds it
 cvar_t zl_sfx_oot		= { "zl_sfx_oot", "0", FCVAR_ARCHIVE };		// use ripped OoT sounds from sound/zelda/oot/
 cvar_t zl_hl_suit		= { "zl_hl_suit", "0", FCVAR_SERVER };		// also give the HEV suit (HL HUD + voice)
 cvar_t zl_drops			= { "zl_drops", "1", FCVAR_SERVER };		// monsters drop rupees / hearts
@@ -290,9 +290,9 @@ void CLinkPlayer::Spawn( void )
 	g_engfuncs.pfnSetPhysicsKeyValue( edict(), "zl", "1" );
 	g_engfuncs.pfnSetPhysicsKeyValue( edict(), "zs", zl_sfx_oot.value ? "1" : "0" );
 
-	if ( zl_model.string && zl_model.string[0] && strcmp( zl_model.string, "models/player.mdl" ) )
+	if ( strcmp( ZL_PlayerModel(), "models/player.mdl" ) )
 	{
-		SET_MODEL( ENT( pev ), zl_model.string );
+		SET_MODEL( ENT( pev ), ZL_PlayerModel() );
 		UTIL_SetSize( pev, VEC_HULL_MIN, VEC_HULL_MAX );
 	}
 
@@ -419,6 +419,7 @@ void CLinkPlayer::PostThink( void )
 
 	ZSwordThink();
 	ZItemThink();
+	ZUpdateModel();
 
 	// Link's body faces his shape yaw, not the camera
 	pev->angles = Vector( 0, ZFacing(), 0 );
@@ -426,6 +427,80 @@ void CLinkPlayer::PostThink( void )
 	// Talking: stay frozen until the client closes the box. Safety net for lost commands.
 	if ( m_hZTalkTo == NULL && ZAction() == ZACT_TALK && gpGlobals->time - m_flZTalkStart > 60.0f )
 		ZSetAction( ZACT_STAND );
+}
+
+/*
+=============================================================================
+ link.mdl: what Link holds (gPlayerModelTypes) and blinking
+
+ Bodygroups, in the order make_link_model.py writes them:
+   1 lhand: 0 open, 1 fist, 2 master sword
+   2 rhand: 0 open, 1 fist, 2 hylian shield, 3 bow, 4 hookshot
+   3 back:  0 sword + shield, 1 shield + empty sheath, 2 empty sheath, 3 sword in sheath
+ Skin: 0 eyes open, 1 half, 2 closed
+=============================================================================
+*/
+void CLinkPlayer::ZUpdateModel( void )
+{
+	int act = ZAction();
+
+	// Swinging draws the sword; items, climbing and grabbing put it away (Player_PutAwayHeldItem)
+	if ( act == ZACT_SLASH || act == ZACT_JUMPSLASH || act == ZACT_JUMPSLASH_END || act == ZACT_SPIN_CHARGE || act == ZACT_SPIN )
+		m_fZSwordOut = TRUE;
+	else if ( act == ZACT_AIM || act == ZACT_CLIMB || act == ZACT_HOOKFLY || m_hZHeldBomb != NULL || !( pev->iuser3 & ZSF_HASSWORD ) )
+		m_fZSwordOut = FALSE;
+
+	if ( !strstr( STRING( pev->model ), "/link/" ) )
+		return;
+
+	BOOL hasShield = ( pev->iuser3 & ZSF_HASSHIELD ) != 0;
+	BOOL shielding = act == ZACT_SHIELD || ( ZState() & ZL_STATE_SHIELDING );
+	int item = m_iZHeldItem;
+	int lhand = 0, rhand = 0, back = hasShield ? 0 : 3;
+
+	if ( item == ZITEM_BOW && ( act == ZACT_AIM || ( ZState() & ( ZL_STATE_LOCKED | ZL_STATE_PARALLEL ) ) ) )
+	{
+		lhand = 1;		// PLAYER_MODELGROUP_BOW_SLINGSHOT
+		rhand = 3;
+	}
+	else if ( ( item == ZITEM_HOOKSHOT || item == ZITEM_LONGSHOT ) && ( act == ZACT_AIM || act == ZACT_HOOKFLY ||
+				( ZState() & ( ZL_STATE_LOCKED | ZL_STATE_PARALLEL ) ) ) )
+	{
+		rhand = 4;		// PLAYER_MODELGROUP_HOOKSHOT
+	}
+	else if ( m_fZSwordOut )
+	{
+		lhand = 2;		// PLAYER_MODELGROUP_SWORD_AND_SHIELD
+		rhand = hasShield ? 2 : 1;
+		back = 2;
+	}
+	else if ( shielding && hasShield )
+	{
+		rhand = 2;		// Player_SetModelsForHoldingShield
+		back = 3;
+	}
+
+	SetBodygroup( 1, lhand );
+	SetBodygroup( 2, rhand );
+	SetBodygroup( 3, back );
+
+	// Blink every 1-4 seconds: half, closed, closed, half at 20 frames a second
+	static const int blink[] = { 1, 2, 2, 1, 0 };
+	if ( gpGlobals->time >= m_flZBlinkNext )
+	{
+		if ( m_iZBlinkStep < (int)( sizeof( blink ) / sizeof( blink[0] ) ) )
+		{
+			pev->skin = blink[m_iZBlinkStep++];
+			m_flZBlinkNext = gpGlobals->time + 0.05f;
+		}
+		else
+		{
+			m_iZBlinkStep = 0;
+			m_flZBlinkNext = gpGlobals->time + RANDOM_FLOAT( 1.0f, 4.0f );
+		}
+	}
+	if ( act == ZACT_DEAD || act == ZACT_KNOCKDOWN )
+		pev->skin = 2;
 }
 
 void CLinkPlayer::Jump( void )
@@ -694,6 +769,8 @@ void CLinkPlayer::ZUpdateDoAction( void )
 	// Nothing to interact with: the A button shows what A will do on its own
 	if ( best == ZDO_NONE && ( m_iZPad & ZPAD_Z ) && ( pev->iuser3 & ZSF_HASSWORD ) )
 		m_iZDoAction = ZDO_ATTACK;	// jump attack
+	else if ( best == ZDO_NONE && m_fZSwordOut && act == ZACT_STAND && pev->velocity.Length2D() < 20 )
+		m_iZDoAction = ZDO_PUTAWAY;	// standing still with the sword out (running, A still rolls)
 }
 
 void CLinkPlayer::ZDoActionPressed( void )
@@ -703,6 +780,13 @@ void CLinkPlayer::ZDoActionPressed( void )
 		Vector vel = pev->velocity;
 		vel.z = 0;
 		ZThrowBomb( vel.Length() < 20 );
+		return;
+	}
+
+	if ( m_iZDoAction == ZDO_PUTAWAY )
+	{
+		m_fZSwordOut = FALSE;
+		ZSound( CHAN_ITEM, ZS_IT_PUT_AWAY );
 		return;
 	}
 

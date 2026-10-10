@@ -30,3 +30,6 @@ zelda/cl_dlls/
 # Python
 __pycache__/
 *.pyc
+
+# Link model sources made from your ROM (tools/zelda/make_link_model.py)
+tools/zelda/build/

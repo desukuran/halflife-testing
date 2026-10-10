@@ -107,6 +107,7 @@ public:
 	EHANDLE	m_hZDoAction;
 	int		m_iZDoAction;		// ZDO_*
 	void	ZUpdateDoAction( void );
+	void	ZUpdateModel( void );		// link.mdl hands / sheath bodygroups and blinking
 	void	ZDoActionPressed( void );
 
 	// Talking (zl_message.cpp)
@@ -135,6 +136,9 @@ public:
 
 	// Items (zl_items.cpp)
 	int		m_iZHeldItem;			// item the C button is using right now
+	BOOL	m_fZSwordOut;			// sword (and shield) in hand until A "Put Away"
+	float	m_flZBlinkNext;			// next blink (link.mdl eye skins)
+	int		m_iZBlinkStep;
 	int		m_iZHeldButton;			// 0..2 or -1
 	float	m_flZItemTime;
 	EHANDLE	m_hZHeldBomb;
@@ -207,6 +211,7 @@ extern cvar_t zl_dmg_in_scale;
 extern cvar_t zl_dmg_out_scale;
 extern cvar_t zl_ztoggle;
 extern cvar_t zl_model;
+const char *ZL_PlayerModel( void );	// zl_model if the file exists, else models/player.mdl
 extern cvar_t zl_sfx_oot;
 extern cvar_t zl_hl_suit;
 extern cvar_t zl_drops;

@@ -40,6 +40,9 @@ engine_studio_api_t IEngineStudio;
 /////////////////////
 // Implementation of CStudioModelRenderer.h
 
+// Zelda: the player is being drawn with his own (server set) model, see ZL_PlayerModelOverride
+static int s_zlOwnModel;
+
 /*
 ====================
 Init
@@ -1693,6 +1696,15 @@ int CStudioModelRenderer::StudioDrawPlayer( int flags, entity_state_t *pplayer )
 
 #endif
 
+	// Zelda: Link's model is the one the server set (zl_model), not the "model" userinfo key
+	{
+		extern struct model_s *ZL_PlayerModelOverride( cl_entity_t *ent );
+		struct model_s *own = ZL_PlayerModelOverride( m_pCurrentEntity );
+		if ( own )
+			m_pRenderModel = own;
+		s_zlOwnModel = own != NULL;
+	}
+
 	if (m_pRenderModel == NULL)
 		return 0;
 
@@ -1767,13 +1779,17 @@ int CStudioModelRenderer::StudioDrawPlayer( int flags, entity_state_t *pplayer )
 
 	if (flags & STUDIO_RENDER)
 	{
-		if (m_pCvarHiModels->value && m_pRenderModel != m_pCurrentEntity->model  )
+		if ( s_zlOwnModel )
+		{
+			// link.mdl's bodygroups (hands, sheath) come from the server: leave them alone
+		}
+		else if (m_pCvarHiModels->value && m_pRenderModel != m_pCurrentEntity->model  )
 		{
 			// show highest resolution multiplayer model
 			m_pCurrentEntity->curstate.body = 255;
 		}
 
-		if (!(m_pCvarDeveloper->value == 0 && gEngfuncs.GetMaxClients() == 1 ) && ( m_pRenderModel == m_pCurrentEntity->model ) )
+		if ( !s_zlOwnModel && !(m_pCvarDeveloper->value == 0 && gEngfuncs.GetMaxClients() == 1 ) && ( m_pRenderModel == m_pCurrentEntity->model ) )
 		{
 			m_pCurrentEntity->curstate.body = 1; // force helmet
 		}

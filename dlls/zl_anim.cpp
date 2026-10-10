@@ -151,7 +151,11 @@ static void ZL_BuildAnimCache( CBaseAnimating *pEnt )
 
 		for ( int j = 0; j < 4 && def.seq[j]; j++ )
 		{
-			int s = LookupSequence( pmodel, def.seq[j] );
+			// Studio sequence labels hold 31 characters; make_link_model.py cuts longer OoT names
+			char label[32];
+			strncpy( label, def.seq[j], sizeof( label ) - 1 );
+			label[sizeof( label ) - 1] = 0;
+			int s = LookupSequence( pmodel, label );
 			if ( s >= 0 )
 			{
 				sAnimCache.seq[i] = s;
