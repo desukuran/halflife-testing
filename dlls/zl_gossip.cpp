@@ -59,21 +59,17 @@ static float GS_SmoothStepToF( float *pValue, float target, float fraction, floa
 				stepSize = -step;
 			*pValue += stepSize;
 		}
+		else if ( stepSize > 0.0f )
+		{
+			*pValue += minStep;
+			if ( target < *pValue )
+				*pValue = target;
+		}
 		else
 		{
-			if ( stepSize < minStep )
-			{
-				*pValue += minStep;
-				stepSize = minStep;
-				if ( target < *pValue )
-					*pValue = target;
-			}
-			if ( stepSize > -minStep )
-			{
-				*pValue += -minStep;
-				if ( *pValue < target )
-					*pValue = target;
-			}
+			*pValue -= minStep;
+			if ( *pValue < target )
+				*pValue = target;
 		}
 	}
 	return fabs( target - *pValue );
@@ -208,6 +204,8 @@ int CGossipStone::TakeDamage( entvars_t *pevInflictor, entvars_t *pevAttacker, f
 		action = GS_ARROW;
 	else
 		return 0;
+
+	ALERT( at_console, "Gossip Stone: hit (damage bits %08x), reaction %d\n", bitsDamageType, action );
 
 	Reset();
 	m_iAction = action;

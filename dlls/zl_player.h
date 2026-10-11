@@ -138,6 +138,7 @@ public:
 	// Items (zl_items.cpp)
 	int		m_iZHeldItem;			// item the C button is using right now
 	BOOL	m_fZSwordOut;			// sword (and shield) in hand until A "Put Away"
+	float	m_flZPutAwayStart;		// A "Put Away" started (fighter2free plays), 0 = not putting away
 	float	m_flZTalkEndTime;		// when the last text box closed (its A press mustn't start another)
 	BOOL	m_fZWorldFrozen;
 	float	m_flZBlinkNext;			// next blink (link.mdl eye skins)

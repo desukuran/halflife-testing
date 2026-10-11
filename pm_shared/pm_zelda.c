@@ -695,7 +695,8 @@ static int PMZ_HandleA( void )
 	{
 		if ( z.stickDir <= ZDIR_FORWARD )
 		{
-			if ( z.sflags & ZSF_HASSWORD )
+			// Only with the sword in hand (Player_GetMeleeWeaponHeld); sheathed, it's a roll
+			if ( ( z.sflags & ZSF_HASSWORD ) && ( z.sflags & ZSF_SWORDOUT ) )
 				PMZ_StartJumpSlash();
 			else
 				PMZ_StartRoll();
@@ -871,11 +872,15 @@ static void PMZ_ActAir( void )
 		{
 			PMZ_SetAction( ZACT_LAND );
 			PMZ_SetSub( 1 );	// hard landing
+			PMZ_SetMWA( 0 );
 			PMZ_Sound( CHAN_VOICE, ZS_VO_LAND_DAMAGE_S, 1.0f );
 		}
 		else if ( act == ZACT_SIDEHOP || act == ZACT_BACKFLIP )
 		{
+			// D_80853D4C[dir][1 or 2]: each hop has its own landing; remember which (mwa = dir + 1)
+			int dir = ZL_GetSub( z.state );
 			PMZ_SetAction( ZACT_LAND );
+			PMZ_SetMWA( dir + 1 );
 		}
 		else
 		{
@@ -888,6 +893,12 @@ static void PMZ_ActAir( void )
 static void PMZ_ActLand( void )
 {
 	float t = ( ZL_GetSub( z.state ) == 1 ) ? ZL_HARD_LAND_TIME : ZL_LAND_TIME;
+	int hop = ZL_GetMWA( z.state );		// landing out of a hop: dir + 1
+
+	if ( hop == ZDIR_BACKWARD + 1 )
+		t = ( z.sflags & ZSF_HOSTILE ) ? ZL_FLIP_LAND_TIME_R : ZL_FLIP_LAND_TIME;
+	else if ( hop )
+		t = ZL_HOP_LAND_TIME;
 
 	// func_80843E64: Math_StepToF( &speedXZ, 0, 1.0 )
 	PMZ_Decelerate( 1.0f );
@@ -1036,6 +1047,24 @@ int PMZ_Active( void )
 	return z.active;
 }
 
+/*
+ Half-Life only lets go of the floor above 180 units/s upward (PM_CatagorizePosition), and
+ snaps anything within 2 units back down. OoT's hops are slower than that (a side hop is 3.5,
+ 111 units/s; the jump attack 5.0, 159), so without this they never leave the ground: the
+ floor zeroes their upward speed and Link slides along it.
+*/
+int PMZ_Airborne( void )
+{
+	int act;
+
+	if ( !z.active || pmove->velocity[2] <= 0 )
+		return 0;
+
+	act = PMZ_Action();
+	return act == ZACT_SIDEHOP || act == ZACT_BACKFLIP || act == ZACT_JUMP || act == ZACT_JUMPSLASH ||
+		   act == ZACT_FALL;
+}
+
 void PMZ_Begin( void )
 {
 	memset( &z, 0, sizeof( z ) );
@@ -1069,6 +1098,15 @@ void PMZ_Begin( void )
 	// OoT gravity (REG(68)) instead of sv_gravity, still scaled by trigger_gravity etc.
 	z.savedGravity = pmove->gravity;
 	pmove->gravity = ( pmove->gravity ? pmove->gravity : 1.0f ) * ( ZL_GRAVITY / pmove->movevars->gravity );
+
+	// -1.2 instead of -1.0: always in the jump attack (Player_Action_80844AF4), and in any other
+	// jump while locked onto an enemy (Player_Action_8084411C, Player_CheckHostileLockOn)
+	{
+		int act = PMZ_Action();
+		if ( act == ZACT_JUMPSLASH || ( ( z.sflags & ZSF_HOSTILE ) &&
+			 ( act == ZACT_SIDEHOP || act == ZACT_BACKFLIP || act == ZACT_JUMP || act == ZACT_FALL ) ) )
+			pmove->gravity *= 1.2f;
+	}
 }
 
 int PMZ_Think( void )

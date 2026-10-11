@@ -64,6 +64,14 @@ enum zl_anim_e
 	ZANIM_GETITEM,
 	ZANIM_GETITEM_B,
 	ZANIM_CHEST,
+	ZANIM_HOP_LAND_L,		// landing out of a hop, D_80853D4C[dir][1] / [2] (locked onto an enemy)
+	ZANIM_HOP_LAND_L_LOCK,
+	ZANIM_HOP_LAND_R,
+	ZANIM_HOP_LAND_R_LOCK,
+	ZANIM_FLIP_LAND,
+	ZANIM_FLIP_LAND_LOCK,
+	ZANIM_PUTAWAY,			// upper body, legs from the gait like carrying
+	ZANIM_PUTAWAY_NOSHIELD,
 	ZANIM_CARRY,
 	ZANIM_CARRY_WALK,
 	ZANIM_SWIM,
@@ -133,6 +141,16 @@ static const zl_anim_def_t sAnims[ZANIM_COUNT] =
 	{ "gPlayerAnim_link_demo_get_itemB",			{ "link_demo_get_itemB", "ref_aim_squeak", "ref_aim_trip" }, "deep_idle", FALSE },
 	// Opening a chest (ageProperties->unk_98)
 	{ "gPlayerAnim_link_demo_Tbox_open",			{ "link_demo_Tbox_open", "ref_aim_crowbar" },			"crouch_idle", FALSE },
+	// Hop landings (D_80853D4C): the backflip finishes its turn in backturn_jump_end
+	{ "gPlayerAnim_link_fighter_Lside_jump_end",	{ "link_fighter_Lside_jump_end", "crouch_idle" },		ZGAIT_NONE, FALSE },
+	{ "gPlayerAnim_link_fighter_Lside_jump_endL",	{ "link_fighter_Lside_jump_endL", "crouch_idle" },		ZGAIT_NONE, FALSE },
+	{ "gPlayerAnim_link_fighter_Rside_jump_end",	{ "link_fighter_Rside_jump_end", "crouch_idle" },		ZGAIT_NONE, FALSE },
+	{ "gPlayerAnim_link_fighter_Rside_jump_endR",	{ "link_fighter_Rside_jump_endR", "crouch_idle" },		ZGAIT_NONE, FALSE },
+	{ "gPlayerAnim_link_fighter_backturn_jump_end",	{ "link_fighter_backturn_jump_end", "crouch_idle" },	ZGAIT_NONE, FALSE },
+	{ "gPlayerAnim_link_fighter_backturn_jump_endR", { "link_fighter_backturn_jump_endR", "crouch_idle" },	ZGAIT_NONE, FALSE },
+	// A "Put Away" (sItemChangeInfo[PLAYER_ITEM_CHG_5]); free2fighter_free when there's no shield
+	{ "gPlayerAnim_link_normal_fighter2free",		{ "link_normal_fighter2free", "ref_aim_crowbar" },		ZGAIT_AUTO, FALSE },
+	{ "gPlayerAnim_link_normal_free2fighter_free",	{ "link_normal_free2fighter_free", "ref_aim_crowbar" },	ZGAIT_AUTO, FALSE },
 	// Carrying (Player_UpperAction_CarryActor): carryB_wait on the upper body only, the legs
 	// keep running the normal *_free cycle (PLAYER_ANIMTYPE_5). carryB is the lift itself.
 	{ "gPlayerAnim_link_normal_carryB_wait",		{ "link_normal_carryB_wait", "ref_aim_squeak", "ref_aim_trip" }, ZGAIT_AUTO, TRUE },
@@ -217,7 +235,18 @@ static int ZL_PickAnim( CLinkPlayer *pLink )
 	case ZACT_BACKFLIP:		return ZANIM_BACKFLIP;
 	case ZACT_JUMP:			return ZANIM_JUMP;
 	case ZACT_FALL:			return ZANIM_FALL;
-	case ZACT_LAND:			return ZANIM_LAND;
+	case ZACT_LAND:
+	{
+		// Out of a hop: its own landing, the battle one when locked onto an enemy
+		BOOL lock = ( pLink->pev->iuser3 & ZSF_HOSTILE ) != 0;
+		switch ( mwa - 1 )
+		{
+		case ZDIR_LEFT:		return lock ? ZANIM_HOP_LAND_L_LOCK : ZANIM_HOP_LAND_L;
+		case ZDIR_RIGHT:	return lock ? ZANIM_HOP_LAND_R_LOCK : ZANIM_HOP_LAND_R;
+		case ZDIR_BACKWARD:	return lock ? ZANIM_FLIP_LAND_LOCK : ZANIM_FLIP_LAND;
+		default:			return ZANIM_LAND;
+		}
+	}
 	case ZACT_CLIMB:		return ZANIM_CLIMB;
 	case ZACT_JUMPSLASH:	return ZANIM_JUMPSLASH;
 	case ZACT_JUMPSLASH_END: return ZANIM_JUMPSLASH_END;
@@ -257,6 +286,9 @@ static int ZL_PickAnim( CLinkPlayer *pLink )
 	}
 
 	// Standing / moving
+	if ( pLink->m_flZPutAwayStart > 0 && gpGlobals->time - pLink->m_flZPutAwayStart < ZL_PUTAWAY_TIME )
+		return ( pLink->pev->iuser3 & ZSF_HASSHIELD ) ? ZANIM_PUTAWAY : ZANIM_PUTAWAY_NOSHIELD;
+
 	if ( pLink->m_hZHeldBomb != NULL )
 		return speed > 10 ? ZANIM_CARRY_WALK : ZANIM_CARRY;
 
@@ -325,7 +357,8 @@ void CLinkPlayer::ZAnimate( void )
 	vel.z = 0;
 	float speed = vel.Length();
 
-	if ( sAnimCache.full[anim] && ( anim == ZANIM_CARRY || anim == ZANIM_CARRY_WALK ) && sAnimCache.full[ZANIM_LEGS_RUN] )
+	BOOL upperBody = ( anim == ZANIM_CARRY || anim == ZANIM_CARRY_WALK || anim == ZANIM_PUTAWAY || anim == ZANIM_PUTAWAY_NOSHIELD );
+	if ( sAnimCache.full[anim] && upperBody && sAnimCache.full[ZANIM_LEGS_RUN] )
 	{
 		// Upper body only: the renderer takes everything below "Bip01 Spine" (link.mdl's
 		// UpperControl limb) from the gait sequence
@@ -361,6 +394,9 @@ void CLinkPlayer::ZAnimate( void )
 		pev->sequence = seq;
 		pev->frame = 0;
 		ResetSequenceInfo();
+
+		if ( sAnimCache.full[anim] && ( anim == ZANIM_PUTAWAY || anim == ZANIM_PUTAWAY_NOSHIELD ) )
+			pev->framerate = ZL_PUTAWAY_RATE;	// played at 1.2x like OoT's item changes
 
 		// Fit HL's stand-in one shots to the OoT action length so they don't loop or cut off
 		if ( !sAnimCache.full[anim] && !def.loop )

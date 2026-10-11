@@ -154,6 +154,8 @@ enum zl_action_e
 #define ZSF_FROZEN		0x0200	// Talking / cutscene: no input at all
 #define ZSF_MAGIC		0x0400	// Has magic for a great spin attack
 #define ZSF_HOOKSHOT	0x0800	// Hookshot chain is out, Link can't move
+#define ZSF_SWORDOUT	0x1000	// Sword in hand (Player_GetMeleeWeaponHeld), not in its sheath
+#define ZSF_HOSTILE		0x2000	// Locked onto an enemy (PLAYER_STATE1_HOSTILE_LOCK_ON)
 
 // Stick directions relative to the facing yaw (PLAYER_STICK_DIR_*)
 #define ZDIR_NONE		-1
@@ -212,6 +214,15 @@ enum zl_mwa_e
 #define ZL_BONK_TIME			0.9f
 #define ZL_LAND_TIME			0.20f
 #define ZL_HARD_LAND_TIME		0.55f
+// Landing out of a hop (D_80853D4C's *_jump_end / *_jump_endR / L, at one frame per OoT frame)
+#define ZL_HOP_LAND_TIME		ZL_FRAMES( 8.0f )	// Lside_jump_end, Rside_jump_end and their L / R
+#define ZL_FLIP_LAND_TIME		ZL_FRAMES( 7.0f )	// backturn_jump_end
+#define ZL_FLIP_LAND_TIME_R		ZL_FRAMES( 12.0f )	// backturn_jump_endR (locked onto an enemy)
+// Putting the sword away (sItemChangeInfo[PLAYER_ITEM_CHG_5]: fighter2free at 1.2x, the sword
+// goes into the sheath on frame 10 of 20)
+#define ZL_PUTAWAY_RATE			( 1.2f * 1.5f )		// frames per OoT frame
+#define ZL_PUTAWAY_SWAP_TIME	ZL_FRAMES( 10.0f / ZL_PUTAWAY_RATE )
+#define ZL_PUTAWAY_TIME			ZL_FRAMES( 20.0f / ZL_PUTAWAY_RATE )
 #define ZL_SLASH_TIME			0.40f	// kiru + kiru_end
 #define ZL_SLASH_COMBO_TIME		0.20f	// B pressed after this chains the next swing
 #define ZL_SLASH_RECOVER_TIME	0.65f	// kiru_endR, interruptible by movement

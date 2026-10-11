@@ -36,7 +36,7 @@ Link is played with the OoT pad layout. Every control is an ordinary bind, so a 
 | Stick | `+forward/+back/+moveleft/+moveright` | WASD | Camera relative movement. `CTRL` walks (half stick). |
 | A | `+zbtn_a` | SPACE | Context action: roll, sidehop, backflip, jump attack, speak, check, open, climb, put away. |
 | B | `+zbtn_b` | MOUSE1 | Sword. Combos, jump attack, spin attack by holding. |
-| Z | `+zbtn_z` | MOUSE2 | Z-target. Hold, or toggle with `zl_ztoggle 1`. With nothing targeted it snaps the camera behind Link. Z + A: sidehop, backflip, or jump attack with the stick forward. |
+| Z | `+zbtn_z` | MOUSE2 | Z-target. Hold, or toggle with `zl_ztoggle 1`. With nothing targeted it snaps the camera behind Link. Z + A: sidehop, backflip, or with the stick forward a jump attack (sword in hand) or a roll (sword sheathed). Locked onto an enemy, hops fall faster (gravity 1.2) and land with the battle landings. |
 | R | `+zbtn_r` | SHIFT | Shield. |
 | C-left | `+zbtn_cleft` | Q | Item |
 | C-down | `+zbtn_cdown` | R | Item |
@@ -226,6 +226,8 @@ If `zl_model` points at a model that has the `link_*` sequence names (see [Link'
 | `ZANIM_GETITEM` | `gPlayerAnim_link_demo_get_itemA` → `link_demo_get_itemA` (out of a chest, once) | `ref_aim_squeak`, `ref_aim_trip` | deep_idle |
 | `ZANIM_GETITEM_B` | `gPlayerAnim_link_demo_get_itemB` → `link_demo_get_itemB` (picked up; he turns to the camera) | `ref_aim_squeak`, `ref_aim_trip` | deep_idle |
 | `ZANIM_CHEST` | `gPlayerAnim_link_demo_Tbox_open` → `link_demo_Tbox_open` | `ref_aim_crowbar` | crouch_idle |
+| `ZANIM_HOP_LAND_*`, `ZANIM_FLIP_LAND*` | `gPlayerAnim_link_fighter_Lside_jump_end` / `_endL`, `Rside_jump_end` / `_endR`, `backturn_jump_end` / `_endR` (D_80853D4C; the second when locked onto an enemy) | `crouch_idle` | full body |
+| `ZANIM_PUTAWAY` | `gPlayerAnim_link_normal_fighter2free` (`free2fighter_free` without a shield) | `ref_aim_crowbar` | legs by speed |
 | `ZANIM_CARRY` | `gPlayerAnim_link_normal_carryB_wait` → `link_normal_carryB_wait` | `ref_aim_squeak`, `ref_aim_trip` | by speed |
 | `ZANIM_CARRY_WALK` | `gPlayerAnim_link_normal_carryB` → `link_normal_carryB` | `ref_aim_squeak`, `ref_aim_trip` | by speed |
 | `ZANIM_SWIM` | `gPlayerAnim_link_swimer_swim` → `link_swimer_swim` | `swim` | full body |
@@ -384,7 +386,7 @@ This converts adult Link from the decomp's extracted assets:
 - **Animations:** the `gPlayerAnim_*` the game uses, at 20 fps. `--all-anims` converts all 573.
   - Sequence names are the OoT names without `gPlayerAnim_`, cut to 31 characters.
 - **Bodygroups:** the hands and sheath, following OoT's `gPlayerModelTypes`. The server switches them:
-  - sword and shield in hand after attacking, until A "Put Away"
+  - sword and shield in hand after attacking, until A "Put Away" (`fighter2free` on the upper body at 1.2x; the sword goes into the sheath on its frame 10), or talking, opening a chest or getting an item
   - shield in hand while holding R
   - the bow or hookshot while aiming or Z-targeting with it
 - **Skins:** eyes open / half / closed, which the server cycles to blink.

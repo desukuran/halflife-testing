@@ -1573,7 +1573,8 @@ void PM_CatagorizePosition (void)
 	point[1] = pmove->origin[1];
 	point[2] = pmove->origin[2] - 2;
 
-	if (pmove->velocity[2] > 180)   // Shooting up really fast.  Definitely not on ground.
+	// Zelda: Link's hops rise slower than 180 but still leave the ground (PMZ_Airborne)
+	if (pmove->velocity[2] > 180 || PMZ_Airborne())   // Shooting up really fast.  Definitely not on ground.
 	{
 		pmove->onground = -1;
 	}

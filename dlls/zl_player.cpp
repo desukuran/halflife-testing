@@ -312,6 +312,7 @@ void CLinkPlayer::Spawn( void )
 	pev->fuser1 = pev->angles.y;
 	pev->fuser4 = 0;
 	m_flZTalkEndTime = -1.0f;
+	m_flZPutAwayStart = 0;
 	m_fZWorldFrozen = FALSE;
 
 	ZUpdateServerFlags();
@@ -356,6 +357,10 @@ void CLinkPlayer::ZUpdateServerFlags( void )
 		f |= ZSF_HASSHIELD;
 	if ( m_iZMagic >= 12 )
 		f |= ZSF_MAGIC;
+	if ( m_fZSwordOut )
+		f |= ZSF_SWORDOUT;
+	if ( m_hZTarget != NULL && IRelationship( m_hZTarget ) > R_NO )
+		f |= ZSF_HOSTILE;
 
 	if ( m_iZDoAction != ZDO_NONE && m_iZDoAction != ZDO_ATTACK && m_iZDoAction != ZDO_THROW )
 		f |= ZSF_DOACTION;
@@ -463,11 +468,36 @@ void CLinkPlayer::ZUpdateModel( void )
 {
 	int act = ZAction();
 
-	// Swinging draws the sword; items, climbing and grabbing put it away (Player_PutAwayHeldItem)
+	// Swinging draws the sword; items, climbing and grabbing put it away (Player_PutAwayHeldItem),
+	// and so do talking, chests and item gets (Player_SetupWaitForPutAway)
 	if ( act == ZACT_SLASH || act == ZACT_JUMPSLASH || act == ZACT_JUMPSLASH_END || act == ZACT_SPIN_CHARGE || act == ZACT_SPIN )
+	{
 		m_fZSwordOut = TRUE;
-	else if ( act == ZACT_AIM || act == ZACT_CLIMB || act == ZACT_HOOKFLY || m_hZHeldBomb != NULL || !( pev->iuser3 & ZSF_HASSWORD ) )
+		m_flZPutAwayStart = 0;
+	}
+	else if ( act == ZACT_AIM || act == ZACT_CLIMB || act == ZACT_HOOKFLY || act == ZACT_TALK || act == ZACT_CHEST ||
+			  act == ZACT_GETITEM || m_hZHeldBomb != NULL || !( pev->iuser3 & ZSF_HASSWORD ) )
+	{
 		m_fZSwordOut = FALSE;
+		m_flZPutAwayStart = 0;
+	}
+
+	// A "Put Away": fighter2free on the upper body, the sword goes back in on its frame 10
+	if ( m_flZPutAwayStart > 0 )
+	{
+		float t = gpGlobals->time - m_flZPutAwayStart;
+		if ( m_fZSwordOut && t >= ZL_PUTAWAY_SWAP_TIME )
+		{
+			m_fZSwordOut = FALSE;
+			ZSound( CHAN_ITEM, ZS_IT_PUT_AWAY );
+		}
+		if ( t >= ZL_PUTAWAY_TIME || ( act != ZACT_STAND && act != ZACT_SHIELD ) )
+		{
+			if ( m_fZSwordOut && t < ZL_PUTAWAY_SWAP_TIME )
+				m_fZSwordOut = FALSE;		// interrupted before the swap: it goes away anyway
+			m_flZPutAwayStart = 0;
+		}
+	}
 
 	if ( !strstr( STRING( pev->model ), "/link/" ) )
 		return;
@@ -790,7 +820,7 @@ void CLinkPlayer::ZUpdateDoAction( void )
 	// Nothing to interact with: the A button shows what A will do on its own
 	if ( best == ZDO_NONE && ( m_iZPad & ZPAD_Z ) && ( pev->iuser3 & ZSF_HASSWORD ) )
 		m_iZDoAction = ZDO_ATTACK;	// jump attack
-	else if ( best == ZDO_NONE && m_fZSwordOut && act == ZACT_STAND && pev->velocity.Length2D() < 20 )
+	else if ( best == ZDO_NONE && m_fZSwordOut && !m_flZPutAwayStart && act == ZACT_STAND && pev->velocity.Length2D() < 20 )
 		m_iZDoAction = ZDO_PUTAWAY;	// standing still with the sword out (running, A still rolls)
 }
 
@@ -806,8 +836,8 @@ void CLinkPlayer::ZDoActionPressed( void )
 
 	if ( m_iZDoAction == ZDO_PUTAWAY )
 	{
-		m_fZSwordOut = FALSE;
-		ZSound( CHAN_ITEM, ZS_IT_PUT_AWAY );
+		if ( !m_flZPutAwayStart )
+			m_flZPutAwayStart = gpGlobals->time;	// ZUpdateModel plays it out
 		return;
 	}
 
