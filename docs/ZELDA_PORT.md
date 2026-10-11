@@ -91,7 +91,7 @@ Equip items with `zl_equip <0|1|2> <item number>` (C-left, C-down, C-right; item
 | `zmus_play <file> [fadein seconds]` | Play a `.miniusf`, `.usf` or `.wav` (path relative to the mod folder). |
 | `zmus_stop [fadeout seconds]` | Fade out the music. |
 | `zmus_info` | Print the current track, its tags and the playback position. |
-| `zmsg_test <NAME>` | Open any text box from the message database. |
+| `zmsg_test <NAME>` | Open any text box from the message database. `A|B` tries A first, then B (OoT's text when ripped, the port's own otherwise). `{TIME}` in a message prints the time. |
 | `zl_text_test <NAME>` (cvar) | Same as `zmsg_test`, as a cvar: setting it opens that message once and clears it. Names are the ones in `zl_messages.txt`, or text ids like `0x1000` from your ripped `zl_oot_messages.txt`. |
 | `zl_text_next [n]` / `zl_text_prev [n]` | Step through every loaded message in order (n at a time). |
 | `zl_text_list [filter]` | List message names with the start of their text, e.g. `zl_text_list ITEM_`. |
@@ -114,6 +114,7 @@ Equip items with `zl_equip <0|1|2> <item number>` (C-left, C-down, C-right; item
 | `trigger_zmessage` | – | Shows a text box. When it closes, `target` fires with USE_ON for the first choice and USE_OFF otherwise. |
 | `ambient_zmusic` | Audio_QueueSeqCmd | Plays music on map start or when triggered. Keys: `track`, `fadein`, `fadeout`, `volume`. Flags: 1 = play on start, 2 = no loop, 4 = toggle. |
 | `trigger_zmusic_stop` | – | Fades the music out. |
+| `monster_gossip_stone` | En_Gs | Z-targetable; A reads it. Sword: "boing", a wobble, then it tells the time (your PC clock, since Half-Life has none). Arrows and bullets: it rocks. Crushing: flattened for 5 seconds. Fire, shock or energy: it spins up and stretches. A bomb: it counts down, smokes and blasts off into the ceiling. Model from `make_object_models.py` (a Half-Life rock until you build it). |
 | any `monster_*` + `message` key | – | Link reads that message when he talks to it. Scientists and guards without a `message` key use the `SC_*` / `BA_*` pools. |
 
 Batteries count as a small magic jar if Link has magic, and as 5 rupees otherwise. HL weapons picked up with `zl_hl_suit 0` become C-button items.
@@ -377,6 +378,14 @@ This converts adult Link from the decomp's extracted assets:
 The output goes to `tools/zelda/build/link/` (SMD, BMP, QC, `preview.png`) and `zelda/models/player/link/link.mdl`. Both are git ignored.
 
 To compile on Windows without `--studiomdl`, run `studiomdl link.qc` from the SDK's `utils/studiomdl` build, or use Crowbar. In single player the client draws Link with the model the server set, not the `model` userinfo key.
+
+### Other models
+
+```sh
+python3 tools/zelda/make_object_models.py --oot /path/to/oot --studiomdl /path/to/studiomdl
+```
+
+This builds the simple, unskinned objects (for now the Gossip Stone, from `object_gs`) into `zelda/models/zelda/`. The game squashes and stretches them through the entity's `fuser1` / `fuser2`, which the client renderer applies.
 
 ### Test map
 

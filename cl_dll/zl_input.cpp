@@ -159,11 +159,41 @@ void ZInput_PreCreateMove( void )
 void ZInput_CreateMove( float frametime, struct usercmd_s *cmd, int active )
 {
 	static int lastPad;
+	static float lastAngles[3];
+	static int haveAngles;
 
 	if ( !ZL_IsLink() )
 	{
 		lastPad = 0;
+		haveAngles = 0;
 		return;
+	}
+
+	// The engine's view angles are only a mouse accumulator now: pass on how far the mouse
+	// moved them, then aim the usercmd where the camera looks (see ZCam_AddMouse).
+	float cur[3];
+	gEngfuncs.GetViewAngles( cur );
+	if ( haveAngles )
+	{
+		float dy = cur[1] - lastAngles[1];
+		while ( dy > 180 ) dy -= 360;
+		while ( dy < -180 ) dy += 360;
+		ZCam_AddMouse( dy, cur[0] - lastAngles[0] );
+	}
+	// Re-centre the pitch so the engine's clamp never swallows mouse movement
+	float recentre[3] = { 0, cur[1], 0 };
+	gEngfuncs.SetViewAngles( recentre );
+	lastAngles[0] = recentre[0];
+	lastAngles[1] = recentre[1];
+	lastAngles[2] = 0;
+	haveAngles = 1;
+
+	float camAngles[3];
+	if ( ZCam_CommandAngles( camAngles ) )
+	{
+		cmd->viewangles[0] = camAngles[0];
+		cmd->viewangles[1] = camAngles[1];
+		cmd->viewangles[2] = 0;
 	}
 
 	int pad = ZInput_Pad( cmd->buttons );

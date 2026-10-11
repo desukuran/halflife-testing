@@ -91,6 +91,7 @@ void	ZDraw_SpriteRotated( struct model_s *spr, int frame, float cx, float cy, fl
 float	ZDraw_TextWidth( const char *text, float height );
 float	ZDraw_Char( int c, float x, float y, float height, int r, int g, int b, int a );		// returns advance
 float	ZDraw_Text( const char *text, float x, float y, float height, int r, int g, int b, int a );
+void	ZDraw_SetTextYScale( float scale );
 void	ZDraw_TextShadow( const char *text, float x, float y, float height, int r, int g, int b, int a );
 struct model_s *ZDraw_LoadSprite( const char *name );
 
@@ -139,6 +140,8 @@ int		ZText_Speaker( void );
 void	ZCam_Init( void );
 int		ZCam_IsThirdPerson( void );
 void	ZCam_CalcRefdef( struct ref_params_s *pparams );
+void	ZCam_AddMouse( float yaw, float pitch );
+int		ZCam_CommandAngles( float *angles );
 float	ZCam_Letterbox( void );		// 0..32 in 240 line units
 int		ZCam_IsFirstPerson( void );
 

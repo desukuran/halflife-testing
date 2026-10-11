@@ -516,6 +516,18 @@ void CStudioModelRenderer::StudioSetUpTransform (int trivial_accept)
 	angles[PITCH] = -angles[PITCH];
 	AngleMatrix (angles, (*m_protationmatrix));
 
+	// Zelda: squash and stretch (Matrix_Scale in OoT actors' draw functions, e.g. EnGs_Draw).
+	// fuser1 scales the model's width and depth, fuser2 its height; 0 means "not used".
+	if ( m_pCurrentEntity->curstate.fuser1 > 0.0f && m_pCurrentEntity->curstate.fuser2 > 0.0f )
+	{
+		for ( i = 0; i < 3; i++ )
+		{
+			(*m_protationmatrix)[i][0] *= m_pCurrentEntity->curstate.fuser1;
+			(*m_protationmatrix)[i][1] *= m_pCurrentEntity->curstate.fuser1;
+			(*m_protationmatrix)[i][2] *= m_pCurrentEntity->curstate.fuser2;
+		}
+	}
+
 	if ( !IEngineStudio.IsHardware() )
 	{
 		static float viewmatrix[3][4];

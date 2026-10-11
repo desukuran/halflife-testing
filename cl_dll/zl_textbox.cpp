@@ -36,6 +36,7 @@
 #include "const.h"
 #include "com_model.h"
 #include "zl_client.h"
+#include <time.h>
 #include "zl_sounds.h"
 
 #include <string.h>
@@ -342,6 +343,16 @@ static int ZText_Encode( const char *src, unsigned char *out, int max )
 				for ( const char *c = playerName; *c; c++ )
 					PUT( *c );
 			}
+			else if ( !stricmp( code, "TIME" ) )
+			{
+				// MESSAGE_TIME prints the time of day; Half-Life has no clock of its own, so it's yours
+				time_t now = time( NULL );
+				struct tm *lt = localtime( &now );
+				char clock[16];
+				snprintf( clock, sizeof( clock ), "%d:%02d", lt ? lt->tm_hour : 0, lt ? lt->tm_min : 0 );
+				for ( const char *c = clock; *c; c++ )
+					PUT( *c );
+			}
 			else if ( !stricmp( code, "SHIFT" ) && arg )	{ PUT( MSG_SHIFT ); PUT( atoi( arg ) ); }
 			else if ( !stricmp( code, "INSTANT" ) )		PUT( MSG_QUICKTEXT_ENABLE );
 			else if ( !stricmp( code, "/INSTANT" ) )	PUT( MSG_QUICKTEXT_DISABLE );
@@ -578,7 +589,16 @@ static void ZText_StartBox( int offset )
 
 void ZText_Open( const char *name, int speaker )
 {
-	zl_message_t *msg = ZText_Find( name );
+	// "0x2053|GOSSIP_LOOK": the first one that exists (OoT's text when you've ripped it)
+	zl_message_t *msg = NULL;
+	char alts[160];
+	strncpy( alts, name, sizeof( alts ) - 1 );
+	alts[sizeof( alts ) - 1] = 0;
+	for ( char *alt = strtok( alts, "|" ); alt && !msg; alt = strtok( NULL, "|" ) )
+	{
+		msg = ZText_Find( alt );
+		name = alt;
+	}
 	char missing[160];
 	const char *src;
 

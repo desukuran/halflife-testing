@@ -751,7 +751,9 @@ void CLinkPlayer::ZUpdateDoAction( void )
 
 		int what = ZDO_NONE;
 
-		if ( ZL_IsTalker( pEnt ) && dist < 90 )
+		if ( FClassnameIs( pEnt->pev, "monster_gossip_stone" ) && dist < 80 )
+			what = ZDO_CHECK;		// EnGs: Actor_OfferTalk at 40 units
+		else if ( ZL_IsTalker( pEnt ) && dist < 90 )
 			what = ZDO_SPEAK;
 		else if ( ( FClassnameIs( pEnt->pev, "zl_sign" ) || FClassnameIs( pEnt->pev, "func_zl_sign" ) ) && dist < 80 )
 			what = ZDO_CHECK;

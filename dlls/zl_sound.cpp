@@ -26,7 +26,7 @@ const char *ZL_SoundTakesKey( void )
 	return s_zlTakesKey;
 }
 
-static BOOL ZL_FileExists( const char *path )
+BOOL ZL_FileExists( const char *path )
 {
 	int len = 0;
 	byte *data = LOAD_FILE_FOR_ME( (char *)path, &len );

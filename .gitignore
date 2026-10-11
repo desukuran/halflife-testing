@@ -22,6 +22,7 @@ zelda/music/**/*.usflib
 zelda/music/**/*.wav
 zelda/models/player/link/*.mdl
 zelda/models/player/link/*.smd
+zelda/models/zelda/*.mdl
 zelda/maps/*.bsp
 
 # Built libraries copied into the mod folder

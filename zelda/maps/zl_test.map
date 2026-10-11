@@ -183,6 +183,11 @@
 "spawnflags" "1"
 }
 {
+"classname" "monster_gossip_stone"
+"origin" "256 400 0"
+"angles" "0 0 0"
+}
+{
 "classname" "zl_sign"
 "origin" "192 640 0"
 "message" "SIGN_ZL_TEST"

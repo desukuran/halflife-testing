@@ -88,6 +88,15 @@ enum zl_sound_e
 	ZS_NAVI_HELLO,
 	ZS_NAVI_HEY,
 
+	// Gossip Stone (En_Gs)
+	ZS_GS_BOING,
+	ZS_GS_LAUNCH,
+	ZS_GS_FIRE,
+	ZS_GS_COUNT,
+	ZS_GS_COUNT_LAST,
+	ZS_GS_GROW,
+	ZS_GS_ROLL,
+
 	ZS_COUNT
 };
 
@@ -172,6 +181,15 @@ static const zl_sound_t g_zlSounds[ZS_COUNT] =
 	{ "doors/doormove2.wav",			"NA_SE_EV_TBOX_OPEN", 0, 0 },
 	{ "buttons/blip2.wav",				"NA_SE_VO_NA_HELLO_3", 0, 0 },			// Navi: "Hey!" (Object_Kankyo; NA_SE_VO_NAVY_HELLO is silent in OoT)
 	{ "buttons/blip1.wav",				"NA_SE_VO_NA_HELLO_2", 1, 0 },			// Navi: "Listen!" (played right after "Hey!")
+
+	// ZS_GS_*: the Gossip Stone
+	{ "debris/wood2.wav",				"NA_SE_EN_STALKID_ATTACK", 0, 0 },		// hit with a sword: "boing" and wobble
+	{ "weapons/rocket1.wav",			"NA_SE_EV_STONE_LAUNCH", 0, 0 },		// blasting off after a bomb
+	{ "ambience/burning1.wav",			"NA_SE_EV_FIRE_PILLAR", 0, 0 },			// smoking before lift-off
+	{ "buttons/blip1.wav",				"NA_SE_SY_WARNING_COUNT_N", 0, 0 },		// countdown beep (blue)
+	{ "buttons/blip2.wav",				"NA_SE_SY_WARNING_COUNT_E", 0, 0 },		// last beeps (red)
+	{ "debris/concrete1.wav",			"NA_SE_EV_STONE_GROW_UP", 0, 0 },		// stretching up after fire / light
+	{ "debris/concrete3.wav",			"NA_SE_EV_STONE_ROLLING", 0, 0 },		// each turn while spinning
 };
 
 /*

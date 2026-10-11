@@ -81,6 +81,32 @@ struct zl_camera_t
 
 static zl_camera_t s_cam;
 
+// Mouse movement waiting for the next frame, from ZInput (see ZCam_AddMouse)
+static float s_pendingYaw, s_pendingPitch;
+
+/*
+ The camera owns the view angles, but it can't hand them to the engine: SetViewAngles from
+ V_CalcRefdef doesn't reliably reach the next usercmd. Instead ZInput_CreateMove reads how far
+ the mouse moved the engine's angles since the last command (ZCam_AddMouse) and writes the
+ camera's angles straight into the usercmd (ZCam_CommandAngles), which is where pm_zelda reads
+ "which way is up on the stick" (Camera_GetInputDirYaw in OoT).
+*/
+void ZCam_AddMouse( float yaw, float pitch )
+{
+	s_pendingYaw += yaw;
+	s_pendingPitch += pitch;
+}
+
+int ZCam_CommandAngles( float *angles )
+{
+	if ( !s_cam.initialized || !ZL_IsLink() )
+		return 0;
+	angles[0] = s_cam.viewPitch;
+	angles[1] = s_cam.viewYaw;
+	angles[2] = 0;
+	return 1;
+}
+
 static cvar_t *zl_cam_style;
 static cvar_t *zl_cam_follow;
 static cvar_t *zl_cam_mouse;
@@ -188,9 +214,7 @@ static void ZCam_SetView( struct ref_params_s *pparams, const Vector &eye, const
 	VectorCopy( pparams->viewangles, v_angles );
 	VectorCopy( pparams->vieworg, v_origin );
 
-	// The usercmd carries the camera angles
-	Vector set( ang[0], ang[1], 0.0f );
-	gEngfuncs.SetViewAngles( (float *)&set.x );
+	// ZInput_CreateMove puts these in the usercmd
 	s_cam.viewYaw = ang[1];
 	s_cam.viewPitch = ang[0];
 }
@@ -211,17 +235,11 @@ void ZCam_CalcRefdef( struct ref_params_s *pparams )
 	Vector origin = pparams->simorg;
 	Vector velocity = g_pmzPredicted.velocity;
 
-	// Mouse movement since we last wrote the angles
-	Vector cur;
-	gEngfuncs.GetViewAngles( (float *)&cur.x );
-	float mouseYaw = 0, mousePitch = 0;
-	if ( s_cam.initialized )
-	{
-		mouseYaw = ZCam_AngleDiff( cur[1], s_cam.viewYaw );
-		mousePitch = cur[0] - s_cam.viewPitch;
-		if ( fabs( mouseYaw ) > 0.01f || fabs( mousePitch ) > 0.01f )
-			s_cam.lastMouseTime = pparams->time;
-	}
+	// Mouse movement since the last frame
+	float mouseYaw = s_pendingYaw, mousePitch = s_pendingPitch;
+	s_pendingYaw = s_pendingPitch = 0;
+	if ( fabs( mouseYaw ) > 0.01f || fabs( mousePitch ) > 0.01f )
+		s_cam.lastMouseTime = pparams->time;
 	if ( zl_cam_mouse && !zl_cam_mouse->value )
 		mouseYaw = mousePitch = 0;
 
@@ -272,9 +290,13 @@ void ZCam_CalcRefdef( struct ref_params_s *pparams )
 		if ( !s_cam.firstPerson )
 		{
 			// Start looking where Link faces
-			Vector set( 0.0f, facing, 0.0f );
-			gEngfuncs.SetViewAngles( (float *)&set.x );
-			cur = set;
+			s_cam.viewYaw = facing;
+			s_cam.viewPitch = 0;
+		}
+		else
+		{
+			s_cam.viewYaw += mouseYaw;
+			s_cam.viewPitch = max( -70.0f, min( 70.0f, s_cam.viewPitch + mousePitch ) );
 		}
 
 		s_cam.firstPerson = 1;
@@ -283,9 +305,11 @@ void ZCam_CalcRefdef( struct ref_params_s *pparams )
 
 		Vector eye = origin + Vector( pparams->viewheight[0], pparams->viewheight[1], pparams->viewheight[2] );
 		VectorCopy( eye, pparams->vieworg );
-		VectorCopy( cur, pparams->viewangles );
-		s_cam.viewYaw = cur[1];
-		s_cam.viewPitch = cur[0];
+		pparams->viewangles[0] = s_cam.viewPitch;
+		pparams->viewangles[1] = s_cam.viewYaw;
+		pparams->viewangles[2] = 0;
+		VectorCopy( pparams->viewangles, v_angles );
+		VectorCopy( pparams->vieworg, v_origin );
 
 		// Leave first person behind Link
 		s_cam.orbitYaw = facing + 180.0f;

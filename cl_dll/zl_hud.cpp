@@ -525,10 +525,41 @@ void CHudZelda::DrawButtons( float time )
 		else if ( doAction == ZDO_NONE && ( ZL_PredictedState() & ( ZL_STATE_LOCKED | ZL_STATE_PARALLEL ) ) )
 			doAction = ZDO_ATTACK;
 
-		ZDraw_Sprite( g_zlSprButton, 0, x, y, d, d, aR, aG, aB, doAction ? 220 : 120 );
+		// Interface_SetDoAction: a new action flips the button over its horizontal axis,
+		// 0 -> 90 degrees showing the old label, then -90 -> 0 with the new one, at
+		// 31400 / 3 ten-thousandths of a radian per 20 Hz frame (about 0.15 s in all)
+		static int shown = -1, target = -1;
+		static float flipStart = -1.0f;
+		if ( shown < 0 )
+			shown = target = doAction;
+		if ( doAction != target )
+		{
+			target = doAction;
+			flipStart = time;
+		}
+		float angle = 0;	// radians, the button's tilt
+		const float rate = 3.14f / 3.0f * 20.0f;
+		if ( flipStart >= 0 )
+		{
+			angle = ( time - flipStart ) * rate;
+			if ( angle >= 1.57f )
+			{
+				shown = target;
+				angle -= 3.14f;
+				if ( angle >= 0 )
+				{
+					angle = 0;
+					flipStart = -1.0f;
+				}
+			}
+		}
+		float squash = fabsf( cosf( angle ) );
+		float dy = d * squash;
 
-		const char *label = ( doAction > 0 && doAction < ZDO_COUNT ) ? s_doActionNames[doAction] : "";
-		if ( label[0] )
+		ZDraw_Sprite( g_zlSprButton, 0, x, y + ( d - dy ) * 0.5f, d, dy, aR, aG, aB, shown ? 220 : 120 );
+
+		const char *label = ( shown > 0 && shown < ZDO_COUNT ) ? s_doActionNames[shown] : "";
+		if ( label[0] && squash > 0.05f )
 		{
 			float h = 11 * s;
 			float w = ZDraw_TextWidth( label, h );
@@ -537,7 +568,9 @@ void CHudZelda::DrawButtons( float time )
 				h *= d * 1.3f / w;
 				w = ZDraw_TextWidth( label, h );
 			}
+			ZDraw_SetTextYScale( squash );
 			ZDraw_TextShadow( label, x + ( d - w ) * 0.5f, y + d * 0.5f - h * 0.55f, h, 255, 255, 255, 255 );
+			ZDraw_SetTextYScale( 1.0f );
 		}
 	}
 

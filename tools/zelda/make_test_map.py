@@ -123,6 +123,9 @@ def main():
     ents.append(entity("ambient_zmusic", {"origin": "64 128 64", "track": "music/oot/test.miniusf",
                                           "fadein": "1", "fadeout": "2", "volume": "10", "spawnflags": "1"}))
 
+    # A Gossip Stone: read it, hit it, bomb it
+    ents.append(entity("monster_gossip_stone", {"origin": "256 400 0", "angles": "0 0 0"}))
+
     # Sign by the start
     ents.append(entity("zl_sign", {"origin": "192 640 0", "message": "SIGN_ZL_TEST"}))
 

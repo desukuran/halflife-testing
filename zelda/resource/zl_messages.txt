@@ -250,6 +250,20 @@ zombies, open the chest and
 talk to the scientist!
 
 @NAVI_HEY BLUE TOP
-{SFX:NA_SE_VO_NAVY_HEAR}Hey! Listen!
+{SFX:NA_SE_VO_NA_HELLO_3}Hey! Listen!
 Press {YELLOW}Z{WHITE} to target things,
 then {LIGHTBLUE}A{WHITE} to jump at them!{FADE:80}
+
+// ---------------------------------------------------------------------------
+// Gossip Stone (monster_gossip_stone). With your ripped OoT text the stone uses
+// 0x2053 / 0x71B1 instead; these are the port's own words.
+// ---------------------------------------------------------------------------
+
+@GOSSIP_LOOK BLUE VARIABLE
+A strange stone with a single
+staring eye. It feels like it
+knows what you're thinking...
+
+@GOSSIP_TIME BLACK MIDDLE
+{INSTANT}BOING! BOING!
+It is now {TIME}!{/INSTANT}{FADE:40}

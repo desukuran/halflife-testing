@@ -339,7 +339,9 @@ def convert_msg(body):
             out.append("{WAIT}")
         elif name == "POINTS":
             out.append("0")
-        elif name in ("MARATHON_TIME", "RACE_TIME", "TIME"):
+        elif name == "TIME":
+            out.append("{TIME}")
+        elif name in ("MARATHON_TIME", "RACE_TIME"):
             out.append("0:00")
         elif name == "TOKENS":
             out.append("0")

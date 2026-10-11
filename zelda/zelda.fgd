@@ -104,3 +104,11 @@
 [
 	fadeout(string) : "Fade out (seconds)" : "2"
 ]
+
+// ---------------------------------------------------------------------------
+// Monsters
+// ---------------------------------------------------------------------------
+@PointClass base(ZTargetname) size(-22 -22 0, 22 22 51) studio("models/zelda/gossip_stone.mdl") = monster_gossip_stone : "Gossip Stone (En_Gs). Z-target it, read it with A, hit it with the sword for the time, bomb it to send it flying."
+[
+	angles(string) : "Pitch Yaw Roll (Y Z X)" : "0 0 0"
+]

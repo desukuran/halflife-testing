@@ -305,6 +305,13 @@ float ZDraw_TextWidth( const char *text, float height )
 	return w;
 }
 
+// Vertical squash for text (the A button label flipping over); 1 = normal
+static float s_textYScale = 1.0f;
+void ZDraw_SetTextYScale( float scale )
+{
+	s_textYScale = scale;
+}
+
 float ZDraw_Char( int c, float x, float y, float height, int r, int g, int b, int a )
 {
 	float scale = height / ZL_FONT_CELL;
@@ -319,7 +326,9 @@ float ZDraw_Char( int c, float x, float y, float height, int r, int g, int b, in
 		float offset = (float)(int)( ( ZL_FONT_CELL - adv ) / 2 );
 		if ( offset < 0 )
 			offset = 0;
-		ZDraw_Sprite( g_zlSprFont, c - 32, x - offset * scale, y, ZL_FONT_CELL * scale, ZL_FONT_CELL * scale, r, g, b, a );
+		float hy = ZL_FONT_CELL * scale;
+		ZDraw_Sprite( g_zlSprFont, c - 32, x - offset * scale, y + hy * ( 1.0f - s_textYScale ) * 0.5f, ZL_FONT_CELL * scale,
+					  hy * s_textYScale, r, g, b, a );
 	}
 
 	return adv * scale;

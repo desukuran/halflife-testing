@@ -189,6 +189,7 @@ void ZL_PrecacheAll( void );
 void ZL_EmitSound( edict_t *pEdict, int channel, int sound, float volume, float attn, int pitch );
 const char *ZL_SoundPath( int sound );
 const char *ZL_SoundTakesKey( void );
+BOOL ZL_FileExists( const char *path );	// relative to the mod folder
 	// "zv" physinfo: takes per sound id
 
 // Damage translation (zl_combat.cpp)

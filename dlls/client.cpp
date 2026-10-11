@@ -1216,6 +1216,9 @@ int AddToFullPack( struct entity_state_s *state, int e, edict_t *ent, edict_t *h
 	}
 
 	state->scale	  = ent->v.scale;
+	// Zelda: non-uniform scale for squash and stretch (StudioSetUpTransform)
+	state->fuser1	  = ent->v.fuser1;
+	state->fuser2	  = ent->v.fuser2;
 	state->solid	  = ent->v.solid;
 	state->colormap   = ent->v.colormap;
 
