@@ -31,12 +31,35 @@ enum zl_sound_e
 	// Link body (NA_SE_PL_*)
 	ZS_PL_ROLL,
 	ZS_PL_SKIP,
-	ZS_PL_JUMP,
-	ZS_PL_LAND,
 	ZS_PL_BODY_HIT,
 	ZS_PL_DAMAGE,
 	ZS_PL_CLIMB_CLIFF,
+
+	// Footsteps, jumps and landings, one per floor (ZL_SURF_*, in that order)
 	ZS_PL_WALK_GROUND,
+	ZS_PL_WALK_SAND,
+	ZS_PL_WALK_STONE,
+	ZS_PL_WALK_JABU,
+	ZS_PL_WALK_WATER,
+	ZS_PL_WALK_GRASS,
+	ZS_PL_WALK_WOOD,
+	ZS_PL_WALK_ICE,
+	ZS_PL_JUMP,
+	ZS_PL_JUMP_SAND,
+	ZS_PL_JUMP_STONE,
+	ZS_PL_JUMP_JABU,
+	ZS_PL_JUMP_WATER,
+	ZS_PL_JUMP_GRASS,
+	ZS_PL_JUMP_WOOD,
+	ZS_PL_JUMP_ICE,
+	ZS_PL_LAND,
+	ZS_PL_LAND_SAND,
+	ZS_PL_LAND_STONE,
+	ZS_PL_LAND_JABU,
+	ZS_PL_LAND_WATER,
+	ZS_PL_LAND_GRASS,
+	ZS_PL_LAND_WOOD,
+	ZS_PL_LAND_ICE,
 
 	// Items (NA_SE_IT_*)
 	ZS_IT_SWORD_SWING,
@@ -85,6 +108,7 @@ enum zl_sound_e
 	ZS_EN_DAMAGE,
 	ZS_EV_POT_BROKEN,
 	ZS_EV_CHEST_OPEN,
+	ZS_EV_CHEST_UNLOCK,
 	ZS_NAVI_HELLO,
 	ZS_NAVI_HEY,
 
@@ -98,6 +122,20 @@ enum zl_sound_e
 	ZS_GS_ROLL,
 
 	ZS_COUNT
+};
+
+// Floors with their own footsteps: OoT's SURFACE_SFX_OFFSET_* that Half-Life materials map to
+enum zl_surface_e
+{
+	ZL_SURF_DIRT = 0,	// SURFACE_SFX_OFFSET_DIRT (OoT's default floor)
+	ZL_SURF_SAND,		// _SAND
+	ZL_SURF_STONE,		// _STONE
+	ZL_SURF_JABU,		// _JABU (squelchy)
+	ZL_SURF_WATER,		// _WATER_SHALLOW
+	ZL_SURF_GRASS,		// _GRASS
+	ZL_SURF_WOOD,		// _WOOD
+	ZL_SURF_ICE,		// _ICE
+	ZL_SURF_COUNT
 };
 
 typedef struct zl_sound_s
@@ -125,12 +163,36 @@ static const zl_sound_t g_zlSounds[ZS_COUNT] =
 	// ZS_PL_*
 	{ "player/pl_duct1.wav",			"NA_SE_PL_ROLL", 0, 0 },
 	{ "player/pl_duct2.wav",			"NA_SE_PL_SKIP", 0, 0 },
-	{ "player/pl_step2.wav",			"NA_SE_PL_JUMP", 0, 0 },
-	{ "player/pl_step3.wav",			"NA_SE_PL_LAND", 1, 0 },
 	{ "common/bodydrop3.wav",			"NA_SE_PL_BODY_HIT", 0, 0 },
 	{ "player/pl_pain5.wav",			"NA_SE_PL_DAMAGE", 0, 0 },
 	{ "player/pl_ladder1.wav",			"NA_SE_PL_CLIMB_CLIFF", 0, 0 },
-	{ "player/pl_step1.wav",			"NA_SE_PL_WALK_GROUND", 2, 0 },
+
+	// NA_SE_PL_WALK_GROUND + SURFACE_SFX_OFFSET_*. OoT's names for the offsets don't match what
+	// they're used for (offset 3, Jabu-Jabu's belly, is "_DIRT"; offset 10, wood, is "_LADDER").
+	{ "player/pl_dirt1.wav",			"NA_SE_PL_WALK_GROUND", 2, 0 },		// SURFACE_SFX_OFFSET_DIRT
+	{ "player/pl_dirt2.wav",			"NA_SE_PL_WALK_SAND", 2, 0 },			// _SAND
+	{ "player/pl_step1.wav",			"NA_SE_PL_WALK_CONCRETE", 2, 0 },		// _STONE
+	{ "player/pl_slosh1.wav",			"NA_SE_PL_WALK_DIRT", 2, 0 },			// _JABU
+	{ "player/pl_slosh2.wav",			"NA_SE_PL_WALK_WATER0", 1, 0 },		// _WATER_SHALLOW
+	{ "player/pl_dirt3.wav",			"NA_SE_PL_WALK_GRASS", 2, 0 },		// _GRASS
+	{ "player/pl_tile1.wav",			"NA_SE_PL_WALK_LADDER", 2, 0 },		// _WOOD
+	{ "player/pl_tile2.wav",			"NA_SE_PL_WALK_ICE", 0, 0 },			// _ICE
+	{ "player/pl_dirt2.wav",			"NA_SE_PL_JUMP", 0, 0 },
+	{ "player/pl_dirt3.wav",			"NA_SE_PL_JUMP_SAND", 0, 0 },
+	{ "player/pl_step2.wav",			"NA_SE_PL_JUMP_CONCRETE", 0, 0 },
+	{ "player/pl_slosh3.wav",			"NA_SE_PL_JUMP_DIRT", 0, 0 },
+	{ "player/pl_slosh3.wav",			"NA_SE_PL_JUMP_WATER0", 0, 0 },
+	{ "player/pl_dirt4.wav",			"NA_SE_PL_JUMP_GRASS", 0, 0 },
+	{ "player/pl_tile3.wav",			"NA_SE_PL_JUMP_LADDER", 0, 0 },
+	{ "player/pl_tile4.wav",			"NA_SE_PL_JUMP_ICE", 0, 0 },
+	{ "player/pl_dirt4.wav",			"NA_SE_PL_LAND", 1, 0 },
+	{ "player/pl_dirt1.wav",			"NA_SE_PL_LAND_SAND", 1, 0 },
+	{ "player/pl_step3.wav",			"NA_SE_PL_LAND_CONCRETE", 1, 0 },
+	{ "player/pl_slosh4.wav",			"NA_SE_PL_LAND_DIRT", 1, 0 },
+	{ "player/pl_slosh4.wav",			"NA_SE_PL_LAND_WATER0", 1, 0 },
+	{ "player/pl_dirt2.wav",			"NA_SE_PL_LAND_GRASS", 1, 0 },
+	{ "player/pl_tile5.wav",			"NA_SE_PL_LAND_LADDER", 1, 0 },
+	{ "player/pl_tile1.wav",			"NA_SE_PL_LAND_ICE", 1, 0 },
 
 	// ZS_IT_*
 	{ "weapons/cbar_miss1.wav",			"NA_SE_IT_SWORD_SWING", 1, 0 },
@@ -179,6 +241,7 @@ static const zl_sound_t g_zlSounds[ZS_COUNT] =
 	{ "weapons/cbar_hitbod2.wav",		"NA_SE_EN_STAL_DAMAGE", 0, 0 },				// OoT has no generic enemy hurt; a Stalchild's
 	{ "debris/bustcrate1.wav",			"NA_SE_EV_POT_BROKEN", 0, 0 },
 	{ "doors/doormove2.wav",			"NA_SE_EV_TBOX_OPEN", 0, 0 },
+	{ "doors/latchunlocked1.wav",		"NA_SE_EV_TBOX_UNLOCK", 0, 0 },
 	{ "buttons/blip2.wav",				"NA_SE_VO_NA_HELLO_3", 0, 0 },			// Navi: "Hey!" (Object_Kankyo; NA_SE_VO_NAVY_HELLO is silent in OoT)
 	{ "buttons/blip1.wav",				"NA_SE_VO_NA_HELLO_2", 1, 0 },			// Navi: "Listen!" (played right after "Hey!")
 

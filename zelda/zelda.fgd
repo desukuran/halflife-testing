@@ -43,8 +43,13 @@
 // ---------------------------------------------------------------------------
 // Chests, signs, text
 // ---------------------------------------------------------------------------
-@PointClass base(ZTargetname, ZTarget) size(-20 -14 0, 20 14 28) studio("models/w_weaponbox.mdl") = zl_chest : "Treasure chest (open with A)"
+@PointClass base(ZTargetname, ZTarget) size(-20 -20 0, 20 20 32) studio("models/w_weaponbox.mdl") = zl_chest : "Treasure chest (open with A). Angle = the way the latch faces."
 [
+	angles(string) : "Pitch Yaw Roll (Y Z X)" : "0 0 0"
+	spawnflags(flags) =
+	[
+		1 : "Small chest" : 0
+	]
 	item(choices) : "Item inside" : "item_zl_rupee_red" =
 	[
 		"item_zl_rupee_blue" : "Blue rupee"
@@ -60,8 +65,7 @@
 		"item_zl_hylianshield" : "Hylian Shield"
 		"item_zl_magicmeter" : "Magic meter"
 	]
-	model(studio) : "Model (blank = default)" : ""
-	scale(string) : "Scale" : "1.6"
+	model(studio) : "Model (blank = treasure_chest.mdl, or a weapon box without it)" : ""
 ]
 
 @PointClass base(ZTargetname, ZTarget) size(-16 -16 0, 16 16 48) color(150 100 50) = zl_sign : "Sign / anything to read with A (Check)"

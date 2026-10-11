@@ -104,8 +104,9 @@ enum zl_action_e
 	ZACT_DAMAGE,		// Player_Action_8084370C (flinch)
 	ZACT_KNOCKDOWN,		// Player_Action_8084377C / _80843954 (knocked down and getting up)
 	ZACT_TALK,			// Player_Action_Talk
-	ZACT_GETITEM,		// Player_Action_8084E3C4 (holding an item up over his head)
+	ZACT_GETITEM,		// Player_Action_8084E3C4 (holding an item up over his head; sub 1 = out of a chest)
 	ZACT_DEAD,
+	ZACT_CHEST,			// Player_ActionHandler_2 -> link_demo_Tbox_open (EnBox; sub unused)
 
 	ZACT_COUNT
 };
@@ -223,6 +224,14 @@ enum zl_mwa_e
 #define ZL_CLIMB_TIME			0.60f
 #define ZL_LEDGE_PUSH_TIME		ZL_FRAMES( 6.0f )	// ledgeClimbDelayTimer >= 6
 #define ZL_GETITEM_TIME			1.60f
+
+// Opening a chest (EnBox_Open / link_demo_Tbox_open, played at one frame per OoT frame).
+// The lid's animation runs at 1.5 frames per OoT frame: the latch clicks on its frame 30,
+// the lid swings on frame 90.
+#define ZL_CHEST_TIME			ZL_FRAMES( 133.0f )
+#define ZL_CHEST_UNLOCK_TIME	ZL_FRAMES( 30.0f / 1.5f )
+#define ZL_CHEST_OPEN_TIME		ZL_FRAMES( 90.0f / 1.5f )
+#define ZL_CHEST_STAND_DIST		ZL_DIST( 29.4343f )	// Link stands this far from the chest
 
 // Ledge climbing heights (sAgeProperties[adult]: unk_18 59, unk_14 79.4)
 #define ZL_CLIMB_LOW			ZL_DIST( 59.0f )

@@ -144,6 +144,7 @@ public:
 	int		m_iZBlinkStep;
 	int		m_iZHeldButton;			// 0..2 or -1
 	float	m_flZItemTime;
+	int		m_iZPreMoveAction;
 	EHANDLE	m_hZHeldBomb;
 	EHANDLE	m_hZHookshot;
 	float	m_flZNextItemUse;
@@ -157,6 +158,7 @@ public:
 	void	ZThrowNut( void );
 	BOOL	ZItemAimable( int item );
 	int		ZItemAmmo( int item );
+	BOOL	ZFirstPersonAim( void );
 	Vector	ZAimVector( void );
 	Vector	ZHandPosition( void );
 

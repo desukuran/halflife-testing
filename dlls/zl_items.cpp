@@ -458,6 +458,7 @@ void CZeldaHookshot::HookThink( void )
 				ZL_EmitSound( edict(), CHAN_BODY, ZS_IT_HOOKSHOT_STICK_OBJ, 1, ATTN_NORM, PITCH_NORM );
 				UTIL_SetOrigin( pev, tr.vecEndPos - m_vecDir * 2 );
 				m_iState = 2;
+				pev->ltime = gpGlobals->time;	// grace period before "stuck" can end the pull
 				pLink->ZSetAction( ZACT_HOOKFLY );
 				pLink->pev->flags &= ~FL_ONGROUND;
 			}
@@ -677,12 +678,18 @@ Vector CLinkPlayer::ZHandPosition( void )
 }
 
 // First person: the camera. Locked on: straight at the target. Otherwise Link's facing.
+// First person this tick: aiming now, or aiming going into the move that just let go of C
+BOOL CLinkPlayer::ZFirstPersonAim( void )
+{
+	return ZAction() == ZACT_AIM || m_iZPreMoveAction == ZACT_AIM;
+}
+
 Vector CLinkPlayer::ZAimVector( void )
 {
 	int act = ZAction();
 	CBaseEntity *pTarget = m_hZTarget;
 
-	if ( act == ZACT_AIM || act == ZACT_CUP )
+	if ( ZFirstPersonAim() || act == ZACT_CUP )
 	{
 		Vector fwd, right, up;
 		UTIL_MakeVectorsPrivate( pev->v_angle, fwd, right, up );
@@ -705,7 +712,7 @@ void CLinkPlayer::ZFireArrow( void )
 
 	m_ZInv.ammo[ZITEM_BOW]--;
 	Vector dir = ZAimVector();
-	Vector src = ( ZAction() == ZACT_AIM ) ? ( pev->origin + pev->view_ofs + dir * 16 ) : ZHandPosition();
+	Vector src = ZFirstPersonAim() ? ( pev->origin + pev->view_ofs + dir * 16 ) : ZHandPosition();
 
 	CZeldaArrow::Shoot( this, src, dir );
 	ZSound( CHAN_WEAPON, ZS_IT_ARROW_SHOT );
@@ -718,7 +725,7 @@ void CLinkPlayer::ZFireHookshot( void )
 		return;
 
 	Vector dir = ZAimVector();
-	Vector src = ( ZAction() == ZACT_AIM ) ? ( pev->origin + pev->view_ofs + dir * 16 ) : ZHandPosition();
+	Vector src = ZFirstPersonAim() ? ( pev->origin + pev->view_ofs + dir * 16 ) : ZHandPosition();
 	BOOL longshot = ( m_ZInv.items & ( 1 << ZITEM_LONGSHOT ) ) != 0;
 
 	m_hZHookshot = CZeldaHookshot::Shoot( this, src, dir, longshot );
@@ -805,7 +812,7 @@ void CLinkPlayer::ZItemButtonDown( int slot )
 	int item = m_ZInv.cButton[slot];
 	int act = ZAction();
 
-	if ( act == ZACT_TALK || act == ZACT_GETITEM || act == ZACT_DEAD || act == ZACT_HOOKFLY )
+	if ( act == ZACT_TALK || act == ZACT_GETITEM || act == ZACT_CHEST || act == ZACT_DEAD || act == ZACT_HOOKFLY )
 		return;
 
 	if ( item == ZITEM_NONE )
@@ -888,7 +895,9 @@ void CLinkPlayer::ZItemButtonUp( int slot )
 		return;
 
 	int item = m_iZHeldItem;
-	int act = ZAction();
+	// PMZ_ActAim drops back to STAND on the command that lets go of the button, which runs
+	// before this: what counts is whether Link was aiming going into that move
+	int act = ZFirstPersonAim() ? ZACT_AIM : ZAction();
 	BOOL locked = ( pev->iuser4 & ( ZL_STATE_LOCKED | ZL_STATE_PARALLEL ) ) != 0;
 	BOOL drawn = gpGlobals->time - m_flZItemTime >= 0.15f;
 
@@ -1195,21 +1204,40 @@ ZL_DEFINE_PICKUP( item_zl_doubledefense, ZPICK_DOUBLE_DEFENSE )
 /*
 =============================================================================
  zl_chest: treasure chest (EnBox). "item" keyvalue names the item_zl_* inside.
+
+ The map's angle is the way the chest's front (the latch) faces. Opening it is OoT's slow
+ chest: Link steps up to the latch (Player_ActionHandler_2 puts him 29.43 units out, facing
+ the chest), plays link_demo_Tbox_open while the lid's animation runs at 1.5x
+ (EnBox_WaitOpen / EnBox_Open, NA_SE_EV_TBOX_UNLOCK on its frame 30 and NA_SE_EV_TBOX_OPEN on
+ frame 90), the light pours out (Demo_Tre_Lgt), and then he holds the item up
+ (link_demo_get_itemA). The client runs the matching camera (Camera_Demo3, ZCAM_CHEST).
+
+ models/zelda/treasure_chest.mdl comes from your ROM (tools/zelda/make_object_models.py);
+ without it the chest is a weapon box that pops open.
 =============================================================================
 */
+#define ZL_MDL_CHEST_OOT	"models/zelda/treasure_chest.mdl"
+#define SF_CHEST_SMALL		1	// ENBOX_TYPE_SMALL: half size (actor scale 0.005)
+
 class CZeldaChest : public CBaseAnimating
 {
 public:
 	void Spawn( void );
-	void Precache( void ) { PRECACHE_MODEL( (char *)STRING( pev->model ) ); }
+	void Precache( void );
 	void KeyValue( KeyValueData *pkvd );
 	void Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value );
+	void EXPORT OpenThink( void );
+	void GiveItem( CLinkPlayer *pLink );
 	int ObjectCaps( void ) { return CBaseAnimating::ObjectCaps() | FCAP_IMPULSE_USE; }
 	int Save( CSave &save );
 	int Restore( CRestore &restore );
 	static TYPEDESCRIPTION m_SaveData[];
 
 	string_t m_iszItem;
+	EHANDLE m_hOpener;
+	float m_flOpenStart;
+	int m_iOpenStep;
+	BOOL m_fOoTModel;
 };
 
 LINK_ENTITY_TO_CLASS( zl_chest, CZeldaChest );
@@ -1217,6 +1245,10 @@ LINK_ENTITY_TO_CLASS( zl_chest, CZeldaChest );
 TYPEDESCRIPTION CZeldaChest::m_SaveData[] =
 {
 	DEFINE_FIELD( CZeldaChest, m_iszItem, FIELD_STRING ),
+	DEFINE_FIELD( CZeldaChest, m_hOpener, FIELD_EHANDLE ),
+	DEFINE_FIELD( CZeldaChest, m_flOpenStart, FIELD_TIME ),
+	DEFINE_FIELD( CZeldaChest, m_iOpenStep, FIELD_INTEGER ),
+	DEFINE_FIELD( CZeldaChest, m_fOoTModel, FIELD_BOOLEAN ),
 };
 IMPLEMENT_SAVERESTORE( CZeldaChest, CBaseAnimating );
 
@@ -1231,43 +1263,170 @@ void CZeldaChest::KeyValue( KeyValueData *pkvd )
 		CBaseAnimating::KeyValue( pkvd );
 }
 
-void CZeldaChest::Spawn( void )
+void CZeldaChest::Precache( void )
 {
 	if ( FStringNull( pev->model ) )
-		pev->model = MAKE_STRING( ZL_MDL_CHEST );
+	{
+		m_fOoTModel = ZL_FileExists( ZL_MDL_CHEST_OOT );
+		pev->model = MAKE_STRING( m_fOoTModel ? ZL_MDL_CHEST_OOT : ZL_MDL_CHEST );
+	}
+	PRECACHE_MODEL( (char *)STRING( pev->model ) );
+}
+
+void CZeldaChest::Spawn( void )
+{
 	Precache();
 	SET_MODEL( ENT( pev ), STRING( pev->model ) );
-	if ( !pev->scale )
-		pev->scale = 1.6f;
+
+	float size = ( pev->spawnflags & SF_CHEST_SMALL ) ? 0.5f : 1.0f;
+	if ( m_fOoTModel )
+	{
+		// OoT's model faces away from Link: its latch is on the back
+		pev->angles.y = UTIL_AngleMod( pev->angles.y + 180.0f );
+		pev->scale = size;
+		pev->sequence = LookupSequence( "open" );
+		pev->frame = 0;
+		pev->framerate = 0;
+		ResetSequenceInfo();
+		pev->framerate = 0;
+	}
+	else if ( !pev->scale )
+	{
+		pev->scale = 1.6f * size;
+	}
+
 	pev->movetype = MOVETYPE_NONE;
 	pev->solid = SOLID_BBOX;
-	UTIL_SetSize( pev, Vector( -20, -14, 0 ), Vector( 20, 14, 28 ) );
+	UTIL_SetSize( pev, Vector( -20, -20, 0 ) * size, Vector( 20, 20, 32 ) * size );
 	UTIL_SetOrigin( pev, pev->origin );
 	DROP_TO_FLOOR( ENT( pev ) );
 }
 
 void CZeldaChest::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value )
 {
-	if ( pev->frame != 0 )
+	if ( pev->frame != 0 || m_flOpenStart > 0 )
 		return;
 
 	CLinkPlayer *pLink = ZL_GetLink( pActivator );
 	if ( !pLink )
 		return;
 
-	pev->frame = 1;		// open
-	pev->renderfx = kRenderFxGlowShell;
-	pev->rendercolor = Vector( 255, 230, 120 );
-	pev->renderamt = 2;
+	if ( !m_fOoTModel )
+	{
+		// No ripped chest: pop the lid and hand the item straight over
+		pev->frame = 1;
+		pev->renderfx = kRenderFxGlowShell;
+		pev->rendercolor = Vector( 255, 230, 120 );
+		pev->renderamt = 2;
+		ZL_EmitSound( edict(), CHAN_BODY, ZS_EV_CHEST_OPEN, 1, ATTN_NORM, PITCH_NORM );
+		GiveItem( pLink );
+		SUB_UseTargets( pActivator, USE_TOGGLE, 0 );
+		return;
+	}
 
-	ZL_EmitSound( edict(), CHAN_BODY, ZS_EV_CHEST_OPEN, 1, ATTN_NORM, PITCH_NORM );
+	// Link steps up to the latch, facing the chest
+	float front = UTIL_AngleMod( pev->angles.y + 180.0f );
+	Vector fwd;
+	UTIL_MakeVectorsPrivate( Vector( 0, front, 0 ), fwd, NULL, NULL );
+	// OoT's 29.43 units would put Half-Life's wider hull inside the chest's box
+	float stand = max( ZL_CHEST_STAND_DIST, 20.0f * pev->scale + 17.0f );
+	Vector spot = pev->origin + fwd * stand;
+	spot.z = pLink->pev->origin.z;
 
+	TraceResult tr;
+	UTIL_TraceHull( pLink->pev->origin, spot, dont_ignore_monsters, human_hull, pLink->edict(), &tr );
+	if ( !tr.fStartSolid )
+		UTIL_SetOrigin( pLink->pev, tr.vecEndPos );
+
+	pLink->pev->velocity = g_vecZero;
+	pLink->pev->fuser1 = UTIL_AngleMod( front + 180.0f );	// Link's facing (predicted)
+	pLink->ZSetAction( ZACT_CHEST );
+
+	m_hOpener = pLink;
+	m_flOpenStart = gpGlobals->time;
+	m_iOpenStep = 0;
+
+	// EnBox_WaitOpen: Animation_Change( anim, 1.5f, ... ) the frame after Link starts
+	pev->sequence = LookupSequence( "open" );
+	pev->frame = 0;
+	ResetSequenceInfo();
+	pev->framerate = 1.5f;
+
+	SetThink( &CZeldaChest::OpenThink );
+	pev->nextthink = gpGlobals->time + 0.05f;
+
+	SUB_UseTargets( pActivator, USE_TOGGLE, 0 );
+}
+
+void CZeldaChest::OpenThink( void )
+{
+	pev->nextthink = gpGlobals->time + 0.05f;
+	StudioFrameAdvance();
+	if ( m_fSequenceFinished )
+	{
+		pev->frame = 255;
+		pev->framerate = 0;
+	}
+
+	float t = gpGlobals->time - m_flOpenStart;
+	CLinkPlayer *pLink = ZL_GetLink( m_hOpener );
+
+	if ( m_iOpenStep == 0 && t >= ZL_CHEST_UNLOCK_TIME )
+	{
+		ZL_EmitSound( edict(), CHAN_BODY, ZS_EV_CHEST_UNLOCK, 1, ATTN_NORM, PITCH_NORM );
+		m_iOpenStep = 1;
+	}
+	else if ( m_iOpenStep == 1 && t >= ZL_CHEST_OPEN_TIME )
+	{
+		ZL_EmitSound( edict(), CHAN_ITEM, ZS_EV_CHEST_OPEN, 1, ATTN_NORM, PITCH_NORM );
+
+		// Demo_Tre_Lgt: the light pouring out of the chest
+		Vector light = pev->origin + Vector( 0, 0, 24 * pev->scale );
+		MESSAGE_BEGIN( MSG_PVS, SVC_TEMPENTITY, light );
+			WRITE_BYTE( TE_DLIGHT );
+			WRITE_COORD( light.x );
+			WRITE_COORD( light.y );
+			WRITE_COORD( light.z );
+			WRITE_BYTE( 18 );		// radius in 10s
+			WRITE_BYTE( 255 );
+			WRITE_BYTE( 230 );
+			WRITE_BYTE( 140 );
+			WRITE_BYTE( 60 );		// life in 10ths
+			WRITE_BYTE( 0 );		// decay
+		MESSAGE_END();
+		m_iOpenStep = 2;
+	}
+
+	// Link finished link_demo_Tbox_open: the item comes out
+	if ( m_iOpenStep == 2 && t >= ZL_CHEST_TIME )
+	{
+		m_iOpenStep = 3;
+		if ( pLink && pLink->ZAction() == ZACT_CHEST )
+			GiveItem( pLink );
+	}
+
+	if ( m_iOpenStep == 3 && m_fSequenceFinished )
+	{
+		SetThink( NULL );
+		pev->nextthink = 0;
+	}
+
+	// Link was knocked out of it (died, level change...): the chest stays open regardless
+	if ( m_iOpenStep < 3 && ( !pLink || !pLink->IsAlive() ) )
+		m_iOpenStep = 2;
+}
+
+void CZeldaChest::GiveItem( CLinkPlayer *pLink )
+{
 	const char *cls = FStringNull( m_iszItem ) ? "item_zl_rupee_blue" : STRING( m_iszItem );
 	CBaseEntity *pItem = CBaseEntity::Create( (char *)cls, pLink->pev->origin, g_vecZero, NULL );
 	if ( pItem )
 		pItem->Touch( pLink );
 
-	SUB_UseTargets( pActivator, USE_TOGGLE, 0 );
+	if ( pLink->ZAction() == ZACT_GETITEM )
+		pLink->pev->iuser4 = ( pLink->pev->iuser4 & ~ZL_STATE_SUB_MASK ) | ( 1 << ZL_STATE_SUB_SHIFT );	// get_itemA
+	else if ( pLink->ZAction() == ZACT_CHEST )
+		pLink->ZSetAction( ZACT_STAND );		// small things (rupees) have no text box
 }
 
 /*

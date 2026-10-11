@@ -30,6 +30,7 @@
 #include "zl_shared.h"
 #include "zl_sounds.h"
 #include "pm_zelda.h"
+#include "pm_materials.h"
 
 #ifndef PITCH
 #define PITCH	0
@@ -42,6 +43,7 @@
 #endif
 
 extern playermove_t *pmove;
+void PM_CatagorizeTextureType( void );
 int PM_FlyMove( void );
 
 pmz_predicted_t g_pmzPredicted;
@@ -214,6 +216,33 @@ static void PMZ_Sound( int channel, int id, float vol )
 	PMZ_SoundEx( channel, id, vol, 1.0f );
 }
 
+// The floor under Link as one of OoT's SURFACE_SFX_OFFSET_* (SurfaceType_GetSfxOffset), from
+// the Half-Life material of the texture he stands on
+static int PMZ_Surface( void )
+{
+	if ( pmove->waterlevel == 1 )
+		return ZL_SURF_WATER;
+
+	PM_CatagorizeTextureType();
+
+	switch ( pmove->chtexturetype )
+	{
+	case CHAR_TEX_DIRT:		return ZL_SURF_DIRT;
+	case CHAR_TEX_SNOW:		return ZL_SURF_SAND;
+	case CHAR_TEX_SLOSH:	return ZL_SURF_WATER;
+	case CHAR_TEX_WOOD:		return ZL_SURF_WOOD;
+	case CHAR_TEX_GLASS:	return ZL_SURF_ICE;
+	case CHAR_TEX_FLESH:	return ZL_SURF_JABU;
+	default:				return ZL_SURF_STONE;	// concrete, metal, tile, vents, grates, computers
+	}
+}
+
+// Player_PlayJumpingSfx / Player_PlayLandingSfx: NA_SE_PL_JUMP / NA_SE_PL_LAND + the floor
+static void PMZ_FloorSound( int first, float vol )
+{
+	PMZ_Sound( CHAN_BODY, first + PMZ_Surface(), vol );
+}
+
 /*
 =============================================================================
  Control stick
@@ -380,8 +409,10 @@ static void PMZ_StartHop( int dir )
 	pmove->velocity[2] = ZL_VEL( vy );
 	pmove->onground = -1;
 
+	// func_808389E8: the floor's jump sound and "Hup!"
+	PMZ_FloorSound( ZS_PL_JUMP, 0.8f );
 	PMZ_Sound( CHAN_VOICE, ZS_VO_SWORD_N, 1.0f );
-	PMZ_Sound( CHAN_BODY, ( dir == ZDIR_BACKWARD ) ? ZS_PL_ROLL : ZS_PL_SKIP, 0.8f );
+	PMZ_Sound( CHAN_ITEM, ( dir == ZDIR_BACKWARD ) ? ZS_PL_ROLL : ZS_PL_SKIP, 0.8f );
 }
 
 // func_8083BA90( PLAYER_MWA_JUMPSLASH_START, 5.0, 5.0 )
@@ -850,7 +881,7 @@ static void PMZ_ActAir( void )
 		{
 			PMZ_SetAction( ZACT_STAND );
 		}
-		PMZ_Sound( CHAN_BODY, ZS_PL_LAND, 0.6f );
+		PMZ_FloorSound( ZS_PL_LAND, 0.6f );
 	}
 }
 
@@ -1090,8 +1121,16 @@ int PMZ_Think( void )
 		PM_FlyMove();
 		return 1;
 
-	case ZACT_TALK:
 	case ZACT_GETITEM:
+		// link_demo_get_itemB (picked up, not out of a chest): turn to face the camera,
+		// Math_ScaledStepToS( shape.rot.y, camYaw + 0x8000, 4000 ) a frame
+		if ( ZL_GetSub( z.state ) == 0 )
+			z.facing = PMZ_StepAngle( z.facing, pmove->cmd.viewangles[YAW] + 180.0f, 4000.0f * ( 360.0f / 65536.0f ) * 20.0f );
+		PMZ_Decelerate( 8.0f );
+		break;
+
+	case ZACT_TALK:
+	case ZACT_CHEST:
 	case ZACT_DEAD:
 	default:
 		PMZ_Decelerate( 8.0f );
@@ -1141,7 +1180,8 @@ static void PMZ_Footsteps( int act, int onground )
 			float r = spd > 6.0f ? 1.0f : spd / 6.0f;
 			float freq = spd > 6.0f ? 1.1f : r * 0.2f + 0.9f;
 			float vol = spd > 6.0f ? 1.0f : r * 0.225f + 0.775f;
-			PMZ_SoundEx( CHAN_BODY, ZS_PL_WALK_GROUND, vol * 0.7f, freq );
+			// Player_PlaySteppingSfx: NA_SE_PL_WALK_GROUND + the floor's offset
+			PMZ_SoundEx( CHAN_BODY, ZS_PL_WALK_GROUND + PMZ_Surface(), vol * 0.7f, freq );
 		}
 	}
 
@@ -1178,6 +1218,7 @@ void PMZ_PostMove( void )
 			float vy = ( speedOoT > 5.9f ) ? 7.5f : ( 1.25f + 0.2f * speedOoT );
 			pmove->velocity[2] = ZL_VEL( vy );
 			PMZ_SetAction( ZACT_JUMP );
+			PMZ_FloorSound( ZS_PL_JUMP, 0.8f );		// func_80838940
 			PMZ_Sound( CHAN_VOICE, ZS_VO_AUTO_JUMP, 1.0f );
 		}
 		else
@@ -1235,7 +1276,7 @@ void PMZ_End( void )
 	if ( pmove->waterlevel >= 2 || pmove->movetype == MOVETYPE_FLY )
 	{
 		int act = PMZ_Action();
-		if ( act != ZACT_STAND && act != ZACT_DEAD && act != ZACT_TALK && act != ZACT_HOOKFLY && act != ZACT_GETITEM )
+		if ( act != ZACT_STAND && act != ZACT_DEAD && act != ZACT_TALK && act != ZACT_HOOKFLY && act != ZACT_GETITEM && act != ZACT_CHEST )
 			PMZ_SetAction( ZACT_STAND );
 	}
 

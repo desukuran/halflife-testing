@@ -148,7 +148,7 @@ int CLinkPlayer::TakeDamage( entvars_t *pevInflictor, entvars_t *pevAttacker, fl
 	int act = ZAction();
 
 	// Nobody hits Link while he is reading
-	if ( act == ZACT_TALK || act == ZACT_GETITEM || m_hZTalkTo != NULL )
+	if ( act == ZACT_TALK || act == ZACT_GETITEM || act == ZACT_CHEST || m_hZTalkTo != NULL )
 		return 0;
 
 	// Intangibility after a hit (invincibilityTimer)

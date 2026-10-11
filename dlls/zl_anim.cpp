@@ -62,6 +62,8 @@ enum zl_anim_e
 	ZANIM_TALK,
 	ZANIM_TALK_WAIT,
 	ZANIM_GETITEM,
+	ZANIM_GETITEM_B,
+	ZANIM_CHEST,
 	ZANIM_CARRY,
 	ZANIM_CARRY_WALK,
 	ZANIM_SWIM,
@@ -125,7 +127,12 @@ static const zl_anim_def_t sAnims[ZANIM_COUNT] =
 	// Player_Action_Talk: talk_free once (hand to his side), then talk_free_wait loops (breathing)
 	{ "gPlayerAnim_link_normal_talk_free",			{ "link_normal_talk_free", "ref_aim_crowbar" },			"deep_idle", FALSE },
 	{ "gPlayerAnim_link_normal_talk_free_wait",		{ "link_normal_talk_free_wait", "ref_aim_crowbar" },	"deep_idle", TRUE },
-	{ "gPlayerAnim_link_demo_get_itemA",			{ "link_demo_get_itemA", "ref_aim_squeak", "ref_aim_trip" }, "deep_idle", TRUE },
+	// Item get (Player_Action_8084E3C4): both play once and hold their last frame while the text
+	// box is up. itemA comes after a chest, itemB when an item is picked up off the ground.
+	{ "gPlayerAnim_link_demo_get_itemA",			{ "link_demo_get_itemA", "ref_aim_squeak", "ref_aim_trip" }, "deep_idle", FALSE },
+	{ "gPlayerAnim_link_demo_get_itemB",			{ "link_demo_get_itemB", "ref_aim_squeak", "ref_aim_trip" }, "deep_idle", FALSE },
+	// Opening a chest (ageProperties->unk_98)
+	{ "gPlayerAnim_link_demo_Tbox_open",			{ "link_demo_Tbox_open", "ref_aim_crowbar" },			"crouch_idle", FALSE },
 	// Carrying (Player_UpperAction_CarryActor): carryB_wait on the upper body only, the legs
 	// keep running the normal *_free cycle (PLAYER_ANIMTYPE_5). carryB is the lift itself.
 	{ "gPlayerAnim_link_normal_carryB_wait",		{ "link_normal_carryB_wait", "ref_aim_squeak", "ref_aim_trip" }, ZGAIT_AUTO, TRUE },
@@ -225,7 +232,8 @@ static int ZL_PickAnim( CLinkPlayer *pLink )
 		if ( pLink->m_iZAnim == ZANIM_TALK_WAIT || ( pLink->m_iZAnim == ZANIM_TALK && pLink->m_fSequenceFinished ) )
 			return ZANIM_TALK_WAIT;
 		return ZANIM_TALK;
-	case ZACT_GETITEM:		return ZANIM_GETITEM;
+	case ZACT_GETITEM:		return ZL_GetSub( state ) == 1 ? ZANIM_GETITEM : ZANIM_GETITEM_B;
+	case ZACT_CHEST:		return ZANIM_CHEST;
 
 	case ZACT_AIM:
 	{
@@ -279,6 +287,22 @@ static int ZL_PickAnim( CLinkPlayer *pLink )
 	if ( speed < ZL_VEL( 3.0f ) )
 		return ZANIM_WALK;
 	return ZANIM_RUN;
+}
+
+static BOOL ZL_IsCycleAnim( int anim )
+{
+	switch ( anim )
+	{
+	case ZANIM_WALK:
+	case ZANIM_RUN:
+	case ZANIM_Z_SIDE_L:
+	case ZANIM_Z_SIDE_R:
+	case ZANIM_Z_BACK:
+	case ZANIM_SPIN_CHARGE_WALK:
+		return TRUE;
+	default:
+		return FALSE;
+	}
 }
 
 void CLinkPlayer::ZAnimate( void )
@@ -351,6 +375,7 @@ void CLinkPlayer::ZAnimate( void )
 			case ZACT_DAMAGE:	t = ZL_DAMAGE_TIME; break;
 			case ZACT_KNOCKDOWN: t = ZL_KNOCKDOWN_TIME * 0.6f; break;
 			case ZACT_CLIMB:	t = ZL_CLIMB_TIME; break;
+			case ZACT_CHEST:	t = ZL_CHEST_TIME; break;
 			}
 
 			if ( t > 0 )
@@ -368,7 +393,34 @@ void CLinkPlayer::ZAnimate( void )
 		}
 	}
 
-	// Freeze knockdowns on their last frame instead of looping
+	// Walking and running all run off one cycle, 29 frames long, which PMZ_Footsteps advances at
+	// OoT's rate and keeps in fuser2 (Player's unk_868, func_8084029C); each animation shows it
+	// scaled to its own length (the 20 frame run at unk_868 * 20 / 29). Steps land on frames 10
+	// and 24 of it, so the feet and the footstep sounds stay together.
+	if ( sAnimCache.full[anim] && ZL_IsCycleAnim( anim ) && ( pev->flags & FL_ONGROUND ) )
+	{
+		void *pmodel = GET_MODEL_PTR( ENT( pev ) );
+		float frameRate, groundSpeed;
+		GetSequenceInfo( pmodel, pev, &frameRate, &groundSpeed );
+
+		float oot = speed / ZL_VEL( 1.0f );
+		float rate = ( oot * 0.3f + 1.0f ) * 1.5f;	// cycle frames per OoT frame
+		if ( rate > 7.25f )
+			rate = 7.25f;
+
+		float phase = pev->fuser2;
+		if ( phase < 0 || phase >= 29.0f )
+			phase = 0;
+
+		// frameRate is 256ths of the sequence a second at framerate 1 (256 * fps / (frames - 1))
+		pev->frame = phase * ( 256.0f / 29.0f );
+		pev->framerate = ( frameRate > 0 ) ? rate * 20.0f * ( 256.0f / 29.0f ) / frameRate : 1.0f;
+		pev->animtime = gpGlobals->time;
+		m_fSequenceFinished = FALSE;
+		return;
+	}
+
+	// One shots (knockdowns, item get, the chest) hold their last frame instead of looping
 	if ( !def.loop && m_fSequenceFinished )
 	{
 		pev->frame = 255;

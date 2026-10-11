@@ -109,7 +109,7 @@ Equip items with `zl_equip <0|1|2> <item number>` (C-left, C-down, C-right; item
 | `item_zl_rupee`, `_blue`, `_red`, `_purple` | EnItem00 | 1 / 5 / 20 / 50 rupees. Wallet sizes are 99 / 200 / 500. |
 | `item_zl_heart`, `item_zl_magic`, `item_zl_magic_large`, `item_zl_arrows`, `item_zl_bombs`, `item_zl_nuts` | EnItem00 | Collectibles. |
 | `item_zl_heartcontainer`, `item_zl_key`, `item_zl_bow`, `item_zl_bombbag`, `item_zl_hookshot`, `item_zl_longshot`, `item_zl_mastersword`, `item_zl_hylianshield`, `item_zl_magicmeter`, `item_zl_doubledefense` | Item_Give + the GI_* text | Each plays the item get pose, a fanfare and a text box. |
-| `zl_chest` | EnBox | Opened with A. The `item` key picks the contents. |
+| `zl_chest` | EnBox | Opened with A. The `item` key picks the contents; the angle is the way the latch faces; spawnflag 1 makes a small chest. With `treasure_chest.mdl` (from `make_object_models.py`) it is OoT's slow chest: Link steps up and plays `link_demo_Tbox_open`, the lid opens at 1.5x with the latch click (frame 30) and creak (frame 90), the light comes out, and the camera is `Camera_Demo3`. Then he holds the item up (`link_demo_get_itemA`). Without the model it is a weapon box that pops open. |
 | `zl_sign`, `func_zl_sign` | EnKanban | Read with A (Check). |
 | `trigger_zmessage` | – | Shows a text box. When it closes, `target` fires with USE_ON for the first choice and USE_OFF otherwise. |
 | `ambient_zmusic` | Audio_QueueSeqCmd | Plays music on map start or when triggered. Keys: `track`, `fadein`, `fadeout`, `volume`. Flags: 1 = play on start, 2 = no loop, 4 = toggle. |
@@ -223,7 +223,9 @@ If `zl_model` points at a model that has the `link_*` sequence names (see [Link'
 | `ZANIM_DAMAGE` | `gPlayerAnim_link_normal_front_shit` → `link_normal_front_shit` | `ref_aim_crowbar` | crouch_idle |
 | `ZANIM_KNOCKDOWN` | `gPlayerAnim_link_normal_front_downA` → `link_normal_front_downA` | `die_backwards1`, `die_backwards` | full body |
 | `ZANIM_TALK` | `gPlayerAnim_link_normal_talk_free` → `link_normal_talk_free` | `ref_aim_crowbar` | deep_idle |
-| `ZANIM_GETITEM` | `gPlayerAnim_link_demo_get_itemA` → `link_demo_get_itemA` | `ref_aim_squeak`, `ref_aim_trip` | deep_idle |
+| `ZANIM_GETITEM` | `gPlayerAnim_link_demo_get_itemA` → `link_demo_get_itemA` (out of a chest, once) | `ref_aim_squeak`, `ref_aim_trip` | deep_idle |
+| `ZANIM_GETITEM_B` | `gPlayerAnim_link_demo_get_itemB` → `link_demo_get_itemB` (picked up; he turns to the camera) | `ref_aim_squeak`, `ref_aim_trip` | deep_idle |
+| `ZANIM_CHEST` | `gPlayerAnim_link_demo_Tbox_open` → `link_demo_Tbox_open` | `ref_aim_crowbar` | crouch_idle |
 | `ZANIM_CARRY` | `gPlayerAnim_link_normal_carryB_wait` → `link_normal_carryB_wait` | `ref_aim_squeak`, `ref_aim_trip` | by speed |
 | `ZANIM_CARRY_WALK` | `gPlayerAnim_link_normal_carryB` → `link_normal_carryB` | `ref_aim_squeak`, `ref_aim_trip` | by speed |
 | `ZANIM_SWIM` | `gPlayerAnim_link_swimer_swim` → `link_swimer_swim` | `swim` | full body |
@@ -234,7 +236,19 @@ Every sound Link makes is listed in `pm_shared/zl_sounds.h` with a Half-Life sta
 
 Each sound plays `sound/zelda/oot/<NA_SE name>.wav` when that file exists (made by `tools/zelda/extract_sfx.py`), else its Half-Life stand-in. `zl_oot_sounds 0` forces the stand-ins. The server decides this when the map loads and precaches only what it chose; the console prints how many of each.
 
-Footsteps follow OoT's walk cycle (`func_8084029C`). Their frequency (0.9 to 1.1) and volume come from Link's speed, and `NA_SE_PL_WALK_GROUND` adds up to 16% random pitch on top.
+Footsteps follow OoT's walk cycle (`func_8084029C`): one 29 frame cycle, advanced by `(speed * 0.3 + 1) * 1.5` frames a game frame (at most 7.25), with steps on frames 10 and 24. With `link.mdl` the walk, run and Z-targeting walks show that same cycle scaled to their length, so the feet match the sounds and the run speeds up with Link. The step's frequency (0.9 to 1.1) and volume come from Link's speed, and the sound adds its own random pitch on top.
+
+Steps, jumps and landings depend on the floor (`NA_SE_PL_WALK_GROUND` / `NA_SE_PL_JUMP` / `NA_SE_PL_LAND` + `SURFACE_SFX_OFFSET_*`), taken from the Half-Life material of the texture under Link (`materials.txt`):
+
+| Half-Life material | OoT floor |
+|---|---|
+| dirt (`D`) | dirt, OoT's default |
+| snow (`N`) | sand |
+| concrete, metal, tile, vent, grate, computer | stone |
+| slosh (`S`), or standing in shallow water | shallow water |
+| wood (`W`) | wood |
+| glass (`Y`) | ice |
+| flesh (`F`) | Jabu-Jabu's belly |
 
 | Id | Half-Life sound (default) | OoT sound | OoT random pitch | Notes |
 |---|---|---|---|---|
@@ -385,7 +399,10 @@ To compile on Windows without `--studiomdl`, run `studiomdl link.qc` from the SD
 python3 tools/zelda/make_object_models.py --oot /path/to/oot --studiomdl /path/to/studiomdl
 ```
 
-This builds the simple, unskinned objects (for now the Gossip Stone, from `object_gs`) into `zelda/models/zelda/`. The game squashes and stretches them through the entity's `fuser1` / `fuser2`, which the client renderer applies.
+This builds other OoT objects into `zelda/models/zelda/`:
+
+- `gossip_stone.mdl` from `object_gs`, one piece. The game squashes and stretches it through the entity's `fuser1` / `fuser2`, which the client renderer applies.
+- `treasure_chest.mdl` from `object_box`: its 4 limb skeleton, the front and lid display lists where `EnBox_PostLimbDraw` draws them, and the opening animation (`gTreasureChestAnim_00024C`, read from the decomp's standard animation format) as the `open` sequence.
 
 ### Test map
 
@@ -417,7 +434,7 @@ The room contains:
 1. **Link model.** Done for adult Link (`make_link_model.py`). Still to do: child Link (`object_link_child`), the animated face (each animation frame carries an eye/mouth index), and the Goron/Zora tunics as skins.
    - The sequence names must match the `link.mdl` column above. `zl_anim.cpp` picks them up automatically.
    - Blender is useful for checking the skeleton and for any cleanup.
-2. **SFX.** Done (`extract_sfx.py`). Still to do: ADSR envelopes and vibrato, and the floor-surface footstep variants (grass, wood, water: `SURFACE_SFX_OFFSET_*`).
+2. **SFX.** Done (`extract_sfx.py`), floor-dependent steps included. Still to do: ADSR envelopes and vibrato, and the chest and item fanfares (they are music, `NA_BGM_OPEN_TRE_BOX` / `NA_BGM_ITEM_GET`).
 3. **Pause subscreen.** Item select, equipment and map, in place of the `zl_equip` and `zl_inventory` commands.
 4. **More of the OoT feel.** Crawlspaces, ladders and vines, swimming, pushing blocks, and Navi hints on C-up.
 5. **In-game tuning.** None of this has been run in the engine yet. Expect camera and animation tuning once it has.

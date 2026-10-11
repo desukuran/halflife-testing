@@ -368,7 +368,7 @@ void CLinkPlayer::ZUpdateServerFlags( void )
 	if ( ZItemAimable( m_ZInv.cButton[1] ) ) f |= ZSF_AIM_CDOWN;
 	if ( ZItemAimable( m_ZInv.cButton[2] ) ) f |= ZSF_AIM_CRIGHT;
 
-	if ( m_hZTalkTo != NULL || ZAction() == ZACT_TALK || ZAction() == ZACT_GETITEM || ( pev->flags & FL_FROZEN ) )
+	if ( m_hZTalkTo != NULL || ZAction() == ZACT_TALK || ZAction() == ZACT_GETITEM || ZAction() == ZACT_CHEST || ( pev->flags & FL_FROZEN ) )
 		f |= ZSF_FROZEN;
 
 	if ( m_hZHookshot != NULL && ZAction() != ZACT_HOOKFLY )
@@ -388,6 +388,7 @@ void CLinkPlayer::PreThink( void )
 
 	int raw = pev->button;
 	m_iZPadLast = m_iZPad;
+	m_iZPreMoveAction = ZAction();	// the move below can end AIM on the very command that releases C
 	m_iZPad = ZL_PadFromButtons( raw );
 
 	pev->button = ZTranslateHLButtons( raw );

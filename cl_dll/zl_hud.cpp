@@ -745,7 +745,7 @@ int CHudZelda::Draw( float flTime )
 	// CAM_HUD_VISIBILITY_A_HEARTS_MAGIC_FORCE while talking
 	DrawHearts( flTime );
 	DrawMagic();
-	if ( !talking && act != ZACT_GETITEM )
+	if ( !talking && act != ZACT_GETITEM && act != ZACT_CHEST )
 		DrawCounters();
 	DrawButtons( flTime );
 
