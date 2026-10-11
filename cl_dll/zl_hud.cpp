@@ -415,7 +415,7 @@ void CHudZelda::DrawCount( int value, float right, float bottom, float h, int r,
 void CHudZelda::DrawCounterDigits( const char *text, float x, float y, int r, int g, int b )
 {
 	float s = ZDraw_Scale();
-	int hasDigits = g_zlSprHudIcons && gEngfuncs.pfnSPR_Frames( g_zlSprHudIcons ) >= 12;
+	int hasDigits = g_zlSprHudIcons && g_zlSprHudIcons->numframes >= 12;
 
 	for ( int i = 0; text[i]; i++, x += 8 )
 	{
