@@ -309,7 +309,8 @@ class Material:
                  "chrome")
 
     def key(self):
-        return (self.tex, self.mirror_s, self.mirror_t, self.tint, self.textured, self.alpha_tex, self.solid, self.chrome)
+        return (self.tex, self.mirror_s, self.mirror_t, self.tint, self.textured, self.alpha_tex, self.solid, self.chrome,
+                self.clamp_s, self.clamp_t)
 
 
 class DLRunner:
@@ -421,8 +422,8 @@ class DLRunner:
         m.w, m.h = self.tex_w, self.tex_h
         m.mirror_s = "G_TX_MIRROR" in self.cms
         m.mirror_t = "G_TX_MIRROR" in self.cmt
-        m.clamp_s = "G_TX_CLAMP" in self.cms and not m.mirror_s
-        m.clamp_t = "G_TX_CLAMP" in self.cmt and not m.mirror_t
+        m.clamp_s = "G_TX_CLAMP" in self.cms
+        m.clamp_t = "G_TX_CLAMP" in self.cmt
         alpha = getattr(self, "cc_alpha", None)
         m.alpha_tex = bool(alpha) and any("TEXEL0" in cyc for cyc in alpha)
         if not m.textured:
@@ -447,16 +448,54 @@ class DLRunner:
 # ---------------------------------------------------------------------------------------------
 # Textures
 # ---------------------------------------------------------------------------------------------
+def n64_address(x, size, mirror, clamp):
+    """Texel index the RDP reads for texel coordinate x on one axis (G_TX_MIRROR / WRAP / CLAMP)."""
+    period = size * 2 if mirror else size
+    if clamp:
+        x = min(max(x, 0), period - 1)
+    x %= period
+    if mirror and x >= size:
+        x = period - 1 - x
+    return x
+
+
 class TextureBank:
+    """Every material gets a texture covering exactly the texel area its UVs span, sampled with
+    the N64's addressing, so the SMD's UVs stay in 0..1. studiomdl clamps UVs to -1..2 and
+    repacks them, which breaks mirrored and clamped textures (the Hylian Shield's crest, the
+    Gossip Stone's eye) otherwise."""
+
+    MAX_SIZE = 256
+
     def __init__(self, assets, outdir):
         self.assets = assets
         self.outdir = outdir
-        self.made = {}     # material key -> (bmp name, width, height, masked)
+        self.made = {}     # (material key, texel range) -> (bmp name, width, height, masked)
         self.masked = set()
+        self.names = set()
 
-    def name_for(self, mat, tex_override=None):
+    def source_image(self, mat, tex):
+        path = self.assets.png(tex)
+        if not path:
+            print(f"  warning: texture {tex} not extracted, using grey")
+            img = Image.new("RGBA", (mat.w or 32, mat.h or 32), (160, 160, 160, 255))
+        else:
+            img = Image.open(path).convert("RGBA")
+        if mat.tint != (255, 255, 255):
+            r, g, b, a = img.split()
+            r = r.point(lambda v, k=mat.tint[0]: v * k // 255)
+            g = g.point(lambda v, k=mat.tint[1]: v * k // 255)
+            b = b.point(lambda v, k=mat.tint[2]: v * k // 255)
+            img = Image.merge("RGBA", (r, g, b, a))
+        return img
+
+    def name_for(self, mat, rng=None, tex_override=None):
+        """rng: (x0, x1, y0, y1) in whole texels, the area the material's UVs cover."""
         tex = tex_override or mat.tex
-        key = mat.key() if tex_override is None else (tex,) + mat.key()[1:]
+        mkey = mat.key() if tex_override is None else (tex,) + mat.key()[1:]
+        if mat.solid or mat.chrome or rng is None:
+            rng = None
+        key = mkey + (rng,)
         if key in self.made:
             return self.made[key]
         tint_hex = "%02x%02x%02x" % mat.tint
@@ -464,38 +503,34 @@ class TextureBank:
             base = "solid_" + tint_hex
             img = Image.new("RGBA", (8, 8), mat.tint + (255,))
         else:
-            path = self.assets.png(tex)
-            if not path:
-                print(f"  warning: texture {tex} not extracted, using grey")
-                img = Image.new("RGBA", (mat.w or 32, mat.h or 32), (160, 160, 160, 255))
-            else:
-                img = Image.open(path).convert("RGBA")
-            if mat.tint != (255, 255, 255):
-                r, g, b, a = img.split()
-                r = r.point(lambda v, k=mat.tint[0]: v * k // 255)
-                g = g.point(lambda v, k=mat.tint[1]: v * k // 255)
-                b = b.point(lambda v, k=mat.tint[2]: v * k // 255)
-                img = Image.merge("RGBA", (r, g, b, a))
-            if mat.mirror_s:
-                w, h = img.size
-                big = Image.new("RGBA", (w * 2, h))
-                big.paste(img, (0, 0))
-                big.paste(img.transpose(Image.FLIP_LEFT_RIGHT), (w, 0))
-                img = big
-            if mat.mirror_t:
-                w, h = img.size
-                big = Image.new("RGBA", (w, h * 2))
-                big.paste(img, (0, 0))
-                big.paste(img.transpose(Image.FLIP_TOP_BOTTOM), (0, h))
-                img = big
+            src = self.source_image(mat, tex)
             short = re.sub(r"^g(Link(Adult)?)?", "", tex).replace("Tex", "")
-            base = f"{short}_{tint_hex}" + ("_ms" if mat.mirror_s else "") + ("_mt" if mat.mirror_t else "")
             if mat.chrome:
                 # studiomdl flags any texture with "chrome" in its name; the engine wants 64x64
-                img = img.resize((64, 64), Image.BILINEAR)
+                img = src.resize((64, 64), Image.BILINEAR)
                 base = f"{short}_{tint_hex}_chrome"
+            else:
+                x0, x1, y0, y1 = rng
+                w, h = x1 - x0, y1 - y0
+                sw, sh = src.size
+                step = max(1.0, w / self.MAX_SIZE, h / self.MAX_SIZE)
+                ow, oh = max(1, int(w / step)), max(1, int(h / step))
+                img = Image.new("RGBA", (ow, oh))
+                sp, dp = src.load(), img.load()
+                for yy in range(oh):
+                    ty = n64_address(int(y0 + yy * step), sh, mat.mirror_t, mat.clamp_t)
+                    for xx in range(ow):
+                        tx = n64_address(int(x0 + xx * step), sw, mat.mirror_s, mat.clamp_s)
+                        dp[xx, yy] = sp[tx, ty]
+                base = f"{short}_{tint_hex}"
+        name = base[:40]
+        n = 2
+        while name + ".bmp" in self.names:
+            name = f"{base[:40]}_{n}"
+            n += 1
+        name += ".bmp"
+        self.names.add(name)
         masked = mat.alpha_tex and img.getextrema()[3][0] < 128
-        name = base[:48] + ".bmp"
         save_bmp8(img, os.path.join(self.outdir, name), masked)
         if masked:
             self.masked.add(name)
@@ -580,9 +615,30 @@ def write_mesh_smd(path, limbs, tris, bank):
     rest = [(0.0, 0.0, 0.0)] * len(limbs)
     out = smd_header(limbs)
     out += ["skeleton", "time 0"] + bone_frame(limbs, rest, limbs[0]["joint"]) + ["end", "triangles"]
+
+    # The texel area each material's UVs span (s / t are 10.5 fixed point texels)
+    ranges = {}
+    for mat, vs, two_sided in tris:
+        if mat.solid or mat.chrome:
+            continue
+        k = mat.key()
+        xs = [v[3] / 32.0 for v in vs]
+        ys = [v[4] / 32.0 for v in vs]
+        r = ranges.get(k)
+        lo_x, hi_x, lo_y, hi_y = min(xs), max(xs), min(ys), max(ys)
+        if r:
+            lo_x, hi_x, lo_y, hi_y = min(lo_x, r[0]), max(hi_x, r[1]), min(lo_y, r[2]), max(hi_y, r[3])
+        ranges[k] = (lo_x, hi_x, lo_y, hi_y)
+    texel_range = {}
+    for k, (lo_x, hi_x, lo_y, hi_y) in ranges.items():
+        x0, x1 = int(math.floor(lo_x + 1e-4)), int(math.ceil(hi_x - 1e-4))
+        y0, y1 = int(math.floor(lo_y + 1e-4)), int(math.ceil(hi_y - 1e-4))
+        texel_range[k] = (x0, max(x1, x0 + 1), y0, max(y1, y0 + 1))
+
     count = 0
     for mat, vs, two_sided in tris:
-        name, tw, th, masked = bank.name_for(mat)
+        rng = texel_range.get(mat.key())
+        name, tw, th, masked = bank.name_for(mat, rng)
         rows = []
         for limb, p, n, s, t, col, lit, tgen in vs:
             wp = [world[limb][k] + p[k] for k in range(3)]
@@ -590,17 +646,12 @@ def write_mesh_smd(path, limbs, tris, bank):
             nn = mat_vec(AXIS, n)
             ln = math.sqrt(sum(c * c for c in nn)) or 1.0
             nn = [c / ln for c in nn]
-            if mat.solid or mat.chrome:
+            if rng is None:
                 u, v = 0.5, 0.5
             else:
-                w0 = (mat.w or tw) * (2 if mat.mirror_s else 1)
-                h0 = (mat.h or th) * (2 if mat.mirror_t else 1)
-                u = (s / 32.0) / w0
-                v = (t / 32.0) / h0
-                if mat.clamp_s:
-                    u = min(1.0, max(0.0, u))
-                if mat.clamp_t:
-                    v = min(1.0, max(0.0, v))
+                x0, x1, y0, y1 = rng
+                u = ( s / 32.0 - x0 ) / ( x1 - x0 )
+                v = ( t / 32.0 - y0 ) / ( y1 - y0 )
             rows.append((limb, hp, nn, u, 1.0 - v))
         faces = [rows]
         if two_sided:
@@ -732,7 +783,7 @@ def render(tris, texdir, size, proj, texcache):
             pts.append((W / 2 + a * sc, H / 2 - (b - 0) * sc, d, u, v))
         (x0, y0, d0, u0, v0), (x1, y1, d1, u1, v1), (x2, y2, d2, u2, v2) = pts
         area = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0)
-        if area >= 0:
+        if area <= 0:   # facing away (SMD triangles wind counter-clockwise seen from the front)
             continue
         minx, maxx = max(0, int(min(x0, x1, x2))), min(W - 1, int(max(x0, x1, x2)) + 1)
         miny, maxy = max(0, int(min(y0, y1, y2))), min(H - 1, int(max(y0, y1, y2)) + 1)
@@ -855,12 +906,13 @@ def main():
     eye_keys = [k for k in bank.made if k[0] == EYE_SKINS[0]]
     if eye_keys:
         proto = eye_keys[0]
+        rng = proto[-1]
         for tex in EYE_SKINS:
             m = Material()
-            m.tex, m.mirror_s, m.mirror_t, m.tint, m.textured, m.alpha_tex, m.solid, m.chrome = (tex,) + proto[1:]
+            (m.tex, m.mirror_s, m.mirror_t, m.tint, m.textured, m.alpha_tex, m.solid, m.chrome,
+             m.clamp_s, m.clamp_t) = (tex,) + proto[1:-1]
             m.w = m.h = None
-            m.clamp_s = m.clamp_t = False
-            eye_names.append(bank.name_for(m)[0])
+            eye_names.append(bank.name_for(m, rng)[0])
 
     # Animations
     anims = wanted_animations()
@@ -887,8 +939,7 @@ def main():
         '$cdtexture "."',
         "$scale 1.0",
         "$eyeposition 0 0 28",
-        "$cliptotextures",
-        "",
+            "",
         '$body "body" "body"',
     ]
     for gname, subs in groups:

@@ -73,7 +73,6 @@ def build(obj, extracted, src_root, out_dir, studiomdl, preview):
         '$cd "."',
         '$cdtexture "."',
         "$scale 1.0",
-        "$cliptotextures",
         '$body "body" "body"',
     ]
     for t in sorted(bank.masked):

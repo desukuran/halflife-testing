@@ -95,7 +95,10 @@ void CLinkPlayer::ZSound( int channel, int sound, float volume, float attn, int 
 const char *ZL_PlayerModel( void )
 {
 	static char checked[128];
-	static const char *result = "models/player.mdl";
+	// Not ALLOC_STRING: those are freed on every map change, and the engine keeps the pointer we
+	// precache with ("PF_precache_model_I: Bad string ''" on the next map)
+	static char resultBuf[128] = "models/player.mdl";
+	static const char *result = resultBuf;
 	const char *want = zl_model.string ? zl_model.string : "";
 
 	if ( strcmp( checked, want ) )
@@ -108,7 +111,10 @@ const char *ZL_PlayerModel( void )
 			path = "models/player.mdl";
 
 		if ( ZL_FileExists( path ) )
-			result = STRING( ALLOC_STRING( path ) );
+		{
+			strncpy( resultBuf, path, sizeof( resultBuf ) - 1 );
+			result = resultBuf;
+		}
 		else
 		{
 			result = "models/player.mdl";
@@ -140,9 +146,10 @@ void ZL_PrecacheAll( void )
 		}
 		for ( int t = 1; t <= takes; t++ )
 		{
-			char path[96];
-			ZL_OoTSoundPath( path, sizeof( path ), i, t );
-			PRECACHE_SOUND( (char *)STRING( ALLOC_STRING( path ) ) );	// the name has to outlive this call
+			// The engine keeps the pointer, so the name lives for the whole game
+			static char paths[ZS_COUNT][9][96];
+			ZL_OoTSoundPath( paths[i][t - 1], sizeof( paths[i][t - 1] ), i, t );
+			PRECACHE_SOUND( paths[i][t - 1] );
 			nOoT++;
 		}
 	}
