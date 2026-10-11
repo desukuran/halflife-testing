@@ -86,7 +86,7 @@ BODYGROUPS = [
 
 BONE_NAMES = [
     "Root", "Waist", "LowerControl", "R_Thigh", "R_Shin", "R_Foot", "L_Thigh", "L_Shin", "L_Foot",
-    "UpperControl", "Head", "Hat", "Collar", "L_Shoulder", "L_Forearm", "L_Hand",
+    "Bip01 Spine", "Head", "Hat", "Collar", "L_Shoulder", "L_Forearm", "L_Hand",
     "R_Shoulder", "R_Forearm", "R_Hand", "Sheath", "Torso",
 ]
 
@@ -938,6 +938,9 @@ def main():
         '$cd "."',
         '$cdtexture "."',
         "$scale 1.0",
+        # studiomdl turns every model 90 degrees (defaultzrotation, for 3ds Max's -Y forward);
+        # these SMDs already face +X
+        "$origin 0 0 0 -90",
         "$eyeposition 0 0 28",
             "",
         '$body "body" "body"',

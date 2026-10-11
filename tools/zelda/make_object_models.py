@@ -73,6 +73,7 @@ def build(obj, extracted, src_root, out_dir, studiomdl, preview):
         '$cd "."',
         '$cdtexture "."',
         "$scale 1.0",
+        "$origin 0 0 0 -90",                 # cancel studiomdl's default 90 degree turn
         '$body "body" "body"',
     ]
     for t in sorted(bank.masked):

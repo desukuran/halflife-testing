@@ -108,6 +108,7 @@ public:
 	int		m_iZDoAction;		// ZDO_*
 	void	ZUpdateDoAction( void );
 	void	ZUpdateModel( void );		// link.mdl hands / sheath bodygroups and blinking
+	void	ZFreezeWorld( BOOL freeze );	// monsters hold still while a text box is up
 	void	ZDoActionPressed( void );
 
 	// Talking (zl_message.cpp)
@@ -137,6 +138,8 @@ public:
 	// Items (zl_items.cpp)
 	int		m_iZHeldItem;			// item the C button is using right now
 	BOOL	m_fZSwordOut;			// sword (and shield) in hand until A "Put Away"
+	float	m_flZTalkEndTime;		// when the last text box closed (its A press mustn't start another)
+	BOOL	m_fZWorldFrozen;
 	float	m_flZBlinkNext;			// next blink (link.mdl eye skins)
 	int		m_iZBlinkStep;
 	int		m_iZHeldButton;			// 0..2 or -1

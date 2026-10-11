@@ -196,6 +196,16 @@ void ZInput_CreateMove( float frametime, struct usercmd_s *cmd, int active )
 		cmd->viewangles[2] = 0;
 	}
 
+	// Buttons that were down when a text box closed stay hidden until they're let go, so the A
+	// that finished the conversation doesn't start it again
+	static int heldThroughText;
+	int boxOpen = ZText_IsOpen();
+	if ( !boxOpen && heldThroughText )
+	{
+		heldThroughText &= cmd->buttons;
+		cmd->buttons &= ~heldThroughText;
+	}
+
 	int pad = ZInput_Pad( cmd->buttons );
 	int pressed = pad & ~lastPad;
 	lastPad = pad;
@@ -211,6 +221,7 @@ void ZInput_CreateMove( float frametime, struct usercmd_s *cmd, int active )
 			stick = -1;
 
 		ZText_Input( pressed, stick );
+		heldThroughText = cmd->buttons & ( ZBTN_A | ZBTN_B | ZBTN_Z | ZBTN_R | ZBTN_CLEFT | ZBTN_CDOWN | ZBTN_CRIGHT | IN_USE );
 
 		cmd->buttons &= ~( IN_ATTACK | IN_JUMP | IN_ATTACK2 | IN_RELOAD | IN_RUN | IN_SCORE | IN_ALT1 | IN_DUCK | IN_USE );
 		cmd->forwardmove = cmd->sidemove = cmd->upmove = 0;

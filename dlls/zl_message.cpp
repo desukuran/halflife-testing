@@ -126,6 +126,83 @@ void CLinkPlayer::ZTalkTo( CBaseEntity *pNPC )
 	pev->fuser1 = UTIL_VecToYaw( pNPC->pev->origin - pev->origin );
 }
 
+/*
+ OoT holds the world still while you read: talking puts Link in a cutscene state that most
+ actors check before they act. Here every monster stops thinking and animating until the box
+ closes, and whoever Link is talking to turns its body and head to him (Player_StartTalking /
+ the NPC's own "face the player" update).
+*/
+#define ZL_MAX_FROZEN 256
+static EHANDLE s_hFrozen[ZL_MAX_FROZEN];
+static float s_flFrozenRate[ZL_MAX_FROZEN];
+static int s_iNumFrozen;
+
+void CLinkPlayer::ZFreezeWorld( BOOL freeze )
+{
+	if ( !freeze )
+	{
+		for ( int i = 0; i < s_iNumFrozen; i++ )
+		{
+			CBaseEntity *pEnt = s_hFrozen[i];
+			if ( !pEnt )
+				continue;
+			pEnt->pev->framerate = s_flFrozenRate[i];
+			if ( pEnt->pev->nextthink > 0 )
+				pEnt->pev->nextthink = gpGlobals->time + 0.1f;
+		}
+		s_iNumFrozen = 0;
+		m_fZWorldFrozen = FALSE;
+		return;
+	}
+
+	m_fZWorldFrozen = TRUE;
+	CBaseEntity *pSpeaker = m_hZTalkTo;
+
+	for ( int e = 1; e < gpGlobals->maxEntities; e++ )
+	{
+		edict_t *ed = INDEXENT( e );
+		if ( !ed || ed->free || !( ed->v.flags & FL_MONSTER ) || ( ed->v.flags & FL_CLIENT ) )
+			continue;
+		CBaseEntity *pEnt = CBaseEntity::Instance( ed );
+		if ( !pEnt || !pEnt->IsAlive() )
+			continue;
+
+		int slot = -1;
+		for ( int i = 0; i < s_iNumFrozen; i++ )
+			if ( (CBaseEntity *)s_hFrozen[i] == pEnt )
+				slot = i;
+		if ( slot < 0 )
+		{
+			if ( s_iNumFrozen >= ZL_MAX_FROZEN )
+				continue;
+			slot = s_iNumFrozen++;
+			s_hFrozen[slot] = pEnt;
+			s_flFrozenRate[slot] = pEnt->pev->framerate;
+		}
+
+		// No AI, no animation, no drifting
+		if ( pEnt->pev->nextthink > 0 )
+			pEnt->pev->nextthink = gpGlobals->time + 0.1f;
+		pEnt->pev->velocity.x = pEnt->pev->velocity.y = 0;
+
+		CBaseMonster *pMon = pEnt->MyMonsterPointer();
+		if ( pEnt == pSpeaker && pMon && !FClassnameIs( pEnt->pev, "monster_gossip_stone" ) )
+		{
+			// The one Link talks to keeps its talking animation and looks at him
+			pEnt->pev->framerate = s_flFrozenRate[slot];
+			pMon->pev->ideal_yaw = UTIL_VecToYaw( pev->origin - pEnt->pev->origin );
+			pMon->ChangeYaw( pMon->pev->yaw_speed > 0 ? (int)pMon->pev->yaw_speed : 20 );
+			if ( FClassnameIs( pEnt->pev, "monster_scientist" ) || FClassnameIs( pEnt->pev, "monster_barney" ) )
+				static_cast<CTalkMonster *>( pMon )->IdleHeadTurn( pev->origin );
+			pMon->StudioFrameAdvance();
+		}
+		else
+		{
+			pEnt->pev->framerate = 0;
+		}
+	}
+}
+
 void CLinkPlayer::ZMessageDone( int choice )
 {
 	CBaseEntity *pSpeaker = m_hZTalkTo;
@@ -133,6 +210,7 @@ void CLinkPlayer::ZMessageDone( int choice )
 
 	m_hZTalkTo = NULL;
 	m_iZTalkKind = ZTALK_PLAIN;
+	m_flZTalkEndTime = gpGlobals->time;
 
 	if ( ZAction() == ZACT_TALK || ZAction() == ZACT_GETITEM )
 		ZSetAction( ZACT_STAND );

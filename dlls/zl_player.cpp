@@ -311,6 +311,8 @@ void CLinkPlayer::Spawn( void )
 	pev->iuser4 = 0;
 	pev->fuser1 = pev->angles.y;
 	pev->fuser4 = 0;
+	m_flZTalkEndTime = -1.0f;
+	m_fZWorldFrozen = FALSE;
 
 	ZUpdateServerFlags();
 }
@@ -397,7 +399,8 @@ void CLinkPlayer::PreThink( void )
 		ZUpdateTargeting();
 		ZUpdateDoAction();
 
-		if ( ZPressed( ZPAD_A ) )
+		// The A that closed a text box isn't a new press: wait until it has been let go
+		if ( ZPressed( ZPAD_A ) && gpGlobals->time - m_flZTalkEndTime > 0.3f )
 			ZDoActionPressed();
 	}
 
@@ -429,6 +432,12 @@ void CLinkPlayer::PostThink( void )
 	ZSwordThink();
 	ZItemThink();
 	ZUpdateModel();
+
+	// While a text box is up the world holds still and the speaker turns to Link
+	if ( ZAction() == ZACT_TALK || ZAction() == ZACT_GETITEM )
+		ZFreezeWorld( TRUE );
+	else if ( m_fZWorldFrozen )
+		ZFreezeWorld( FALSE );
 
 	// Link's body faces his shape yaw, not the camera
 	pev->angles = Vector( 0, ZFacing(), 0 );

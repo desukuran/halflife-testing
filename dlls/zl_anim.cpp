@@ -60,11 +60,15 @@ enum zl_anim_e
 	ZANIM_DAMAGE,
 	ZANIM_KNOCKDOWN,
 	ZANIM_TALK,
+	ZANIM_TALK_WAIT,
 	ZANIM_GETITEM,
 	ZANIM_CARRY,
 	ZANIM_CARRY_WALK,
 	ZANIM_SWIM,
 	ZANIM_SWIM_IDLE,
+	ZANIM_LEGS_WAIT,	// legs under an upper body animation (link.mdl's gait), never picked directly
+	ZANIM_LEGS_WALK,
+	ZANIM_LEGS_RUN,
 	ZANIM_COUNT
 };
 
@@ -118,12 +122,20 @@ static const zl_anim_def_t sAnims[ZANIM_COUNT] =
 	{ "gPlayerAnim_link_hook_fly_wait",				{ "link_hook_fly_wait", "longjump", "jump" },			ZGAIT_NONE, TRUE },
 	{ "gPlayerAnim_link_normal_front_shit",			{ "link_normal_front_shit", "ref_aim_crowbar" },		"crouch_idle", FALSE },
 	{ "gPlayerAnim_link_normal_front_downA",		{ "link_normal_front_downA", "die_backwards1", "die_backwards" }, ZGAIT_NONE, FALSE },
-	{ "gPlayerAnim_link_normal_talk_free",			{ "link_normal_talk_free", "ref_aim_crowbar" },			"deep_idle", TRUE },
+	// Player_Action_Talk: talk_free once (hand to his side), then talk_free_wait loops (breathing)
+	{ "gPlayerAnim_link_normal_talk_free",			{ "link_normal_talk_free", "ref_aim_crowbar" },			"deep_idle", FALSE },
+	{ "gPlayerAnim_link_normal_talk_free_wait",		{ "link_normal_talk_free_wait", "ref_aim_crowbar" },	"deep_idle", TRUE },
 	{ "gPlayerAnim_link_demo_get_itemA",			{ "link_demo_get_itemA", "ref_aim_squeak", "ref_aim_trip" }, "deep_idle", TRUE },
+	// Carrying (Player_UpperAction_CarryActor): carryB_wait on the upper body only, the legs
+	// keep running the normal *_free cycle (PLAYER_ANIMTYPE_5). carryB is the lift itself.
 	{ "gPlayerAnim_link_normal_carryB_wait",		{ "link_normal_carryB_wait", "ref_aim_squeak", "ref_aim_trip" }, ZGAIT_AUTO, TRUE },
-	{ "gPlayerAnim_link_normal_carryB",				{ "link_normal_carryB", "ref_aim_squeak", "ref_aim_trip" }, ZGAIT_AUTO, TRUE },
+	{ "gPlayerAnim_link_normal_carryB_wait",		{ "link_normal_carryB_wait", "ref_aim_squeak", "ref_aim_trip" }, ZGAIT_AUTO, TRUE },
 	{ "gPlayerAnim_link_swimer_swim",				{ "link_swimer_swim", "swim" },							ZGAIT_NONE, TRUE },
 	{ "gPlayerAnim_link_swimer_swim_wait",			{ "link_swimer_swim_wait", "treadwater" },				ZGAIT_NONE, TRUE },
+	// ZANIM_LEGS_*: PLAYER_ANIMGROUP_wait / walk / run for PLAYER_ANIMTYPE_5 (holding something)
+	{ "gPlayerAnim_link_normal_wait_free",			{ "link_normal_wait_free", "deep_idle" },				ZGAIT_NONE, TRUE },
+	{ "gPlayerAnim_link_normal_walk_free",			{ "link_normal_walk_free", "walk" },					ZGAIT_NONE, TRUE },
+	{ "gPlayerAnim_link_normal_run_free",			{ "link_normal_run_free", "run" },						ZGAIT_NONE, TRUE },
 };
 
 struct zl_anim_cache_t
@@ -208,7 +220,11 @@ static int ZL_PickAnim( CLinkPlayer *pLink )
 	case ZACT_HOOKFLY:		return ZANIM_HOOKFLY;
 	case ZACT_DAMAGE:		return ZANIM_DAMAGE;
 	case ZACT_KNOCKDOWN:	return ZANIM_KNOCKDOWN;
-	case ZACT_TALK:			return ZANIM_TALK;
+	case ZACT_TALK:
+		// talk_free plays once, then its wait loop takes over
+		if ( pLink->m_iZAnim == ZANIM_TALK_WAIT || ( pLink->m_iZAnim == ZANIM_TALK && pLink->m_fSequenceFinished ) )
+			return ZANIM_TALK_WAIT;
+		return ZANIM_TALK;
 	case ZACT_GETITEM:		return ZANIM_GETITEM;
 
 	case ZACT_AIM:
@@ -285,7 +301,18 @@ void CLinkPlayer::ZAnimate( void )
 	vel.z = 0;
 	float speed = vel.Length();
 
-	if ( sAnimCache.full[anim] )
+	if ( sAnimCache.full[anim] && ( anim == ZANIM_CARRY || anim == ZANIM_CARRY_WALK ) && sAnimCache.full[ZANIM_LEGS_RUN] )
+	{
+		// Upper body only: the renderer takes everything below "Bip01 Spine" (link.mdl's
+		// UpperControl limb) from the gait sequence
+		if ( speed > ZL_VEL( 3.5f ) )
+			pev->gaitsequence = sAnimCache.seq[ZANIM_LEGS_RUN];
+		else if ( speed > 5 )
+			pev->gaitsequence = sAnimCache.seq[ZANIM_LEGS_WALK];
+		else
+			pev->gaitsequence = sAnimCache.seq[ZANIM_LEGS_WAIT];
+	}
+	else if ( sAnimCache.full[anim] )
 	{
 		pev->gaitsequence = 0;
 	}
