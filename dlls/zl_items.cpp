@@ -28,6 +28,7 @@
 
 #define ZL_MDL_ARROW		"models/crossbow_bolt.mdl"	// OOT: object_link_boy arrow (gLinkAdultArrowDL)
 #define ZL_MDL_BOMB			"models/w_grenade.mdl"		// OOT: object_bomb / gameplay_keep gBombBodyDL
+#define ZL_MDL_BOMB_OOT		"models/zelda/bomb.mdl"		// make_object_models.py: gBombCapDL + gBombBodyDL
 #define ZL_MDL_HOOK_TIP		"models/crossbow_bolt.mdl"	// OOT: object_link_boy gLinkAdultHookshotTipDL
 #define ZL_MDL_NUT			"models/w_battery.mdl"		// OOT: gameplay_keep gDekuNutDL
 #define ZL_SPR_CHAIN		"sprites/laserbeam.spr"		// OOT: gLinkAdultHookshotChainDL (drawn as links)
@@ -48,10 +49,15 @@
 #define ZL_MDL_KEY			"models/w_security.mdl"		// OOT: object_gi_key (small key)
 #define ZL_MDL_CHEST		"models/w_weaponbox.mdl"	// OOT: object_box (treasure chest)
 
+static void ZL_PrecacheGetItemModels( void );
+
 void ZL_PrecacheItems( void )
 {
 	PRECACHE_MODEL( ZL_MDL_ARROW );
 	PRECACHE_MODEL( ZL_MDL_BOMB );
+	if ( ZL_FileExists( ZL_MDL_BOMB_OOT ) )
+		PRECACHE_MODEL( ZL_MDL_BOMB_OOT );
+	ZL_PrecacheGetItemModels();
 	PRECACHE_MODEL( ZL_MDL_HOOK_TIP );
 	PRECACHE_MODEL( ZL_MDL_NUT );
 	PRECACHE_MODEL( ZL_SPR_CHAIN );
@@ -186,9 +192,17 @@ public:
 	void EXPORT FuseThink( void );
 	void EXPORT BombTouch( CBaseEntity *pOther );
 	void Explode( void );
+	void FuseFrame( void );
 
 	EHANDLE m_hHolder;		// set while Link carries it over his head
+	BOOL	m_fOoT;			// models/zelda/bomb.mdl: flash skins, camera facing (client), growth
+	int		m_iTimer;		// EnBom timer, OoT frames left
+	int		m_iFlashSpeed;	// flashSpeedScale
+	float	m_flFlash;		// flashIntensity 0..140
+	float	m_flNextFrame;
 };
+
+#define ZL_BOMB_FLASH_SKINS	8	// make_object_models.py FLASH_LEVELS
 
 LINK_ENTITY_TO_CLASS( zl_bomb, CZeldaBomb );
 
@@ -200,8 +214,20 @@ void CZeldaBomb::Spawn( void )
 	pev->solid = SOLID_BBOX;
 	pev->friction = 0.6f;
 	pev->gravity = 0.8f;
-	SET_MODEL( ENT( pev ), ZL_MDL_BOMB );
-	UTIL_SetSize( pev, Vector( -4, -4, -4 ), Vector( 4, 4, 4 ) );
+	m_fOoT = ZL_FileExists( ZL_MDL_BOMB_OOT );
+	SET_MODEL( ENT( pev ), m_fOoT ? ZL_MDL_BOMB_OOT : ZL_MDL_BOMB );
+	if ( m_fOoT )
+	{
+		// The model is centred on the bomb; OoT draws it 7 units up from the floor (shape.yOffset 700)
+		UTIL_SetSize( pev, Vector( -ZL_DIST( 5 ), -ZL_DIST( 5 ), -ZL_DIST( 7 ) ), Vector( ZL_DIST( 5 ), ZL_DIST( 5 ), ZL_DIST( 7 ) ) );
+		pev->effects |= EF_NODRAW;		// scale 0 until the timer reaches 67
+	}
+	else
+		UTIL_SetSize( pev, Vector( -4, -4, -4 ), Vector( 4, 4, 4 ) );
+	m_iTimer = 70;
+	m_iFlashSpeed = 7;
+	m_flFlash = 0;
+	m_flNextFrame = gpGlobals->time + ZL_FRAMES( 1 );
 	pev->dmgtime = gpGlobals->time + ZL_BOMB_FUSE;
 	pev->dmg = ZL_OoTDamageToHL( 4 );
 	SetThink( &CZeldaBomb::FuseThink );
@@ -225,29 +251,83 @@ void CZeldaBomb::FuseThink( void )
 
 	if ( pHolder )
 	{
-		// Over Link's head (PLAYER_STATE1_CARRYING_ACTOR)
-		UTIL_SetOrigin( pev, pHolder->pev->origin + Vector( 0, 0, 44 ) );
+		// Between Link's hands over his head (PLAYER_STATE1_CARRYING_ACTOR: the held actor sits
+		// at sGetItemRefPos), the bomb's centre 7 units above that
+		CLinkPlayer *pLink = ZL_GetLink( pHolder );
+		Vector hands;
+		if ( m_fOoT && pLink && pLink->ZHandsMidpoint( hands ) )
+			UTIL_SetOrigin( pev, hands + Vector( 0, 0, ZL_DIST( 7 ) ) );
+		else
+			UTIL_SetOrigin( pev, pHolder->pev->origin + Vector( 0, 0, 44 ) );
 		pev->velocity = g_vecZero;
 	}
 
-	float left = pev->dmgtime - gpGlobals->time;
-
-	// Flash red faster as the fuse burns down
-	if ( left < 1.5f )
+	while ( gpGlobals->time >= m_flNextFrame && m_iTimer > 0 )
 	{
-		BOOL on = ( (int)( left * ( left < 0.6f ? 16 : 8 ) ) & 1 ) != 0;
-		pev->renderfx = on ? kRenderFxGlowShell : kRenderFxNone;
-		pev->rendercolor = Vector( 255, 30, 30 );
-		pev->renderamt = 10;
+		m_flNextFrame += ZL_FRAMES( 1 );
+		FuseFrame();
 	}
 
-	if ( left <= 0 )
+	if ( m_iTimer <= 0 || pev->dmgtime <= gpGlobals->time )
 	{
 		Explode();
 		return;
 	}
 
 	pev->nextthink = gpGlobals->time + 0.01f;
+}
+
+// One OoT frame of EnBom_Update's fuse
+void CZeldaBomb::FuseFrame( void )
+{
+	m_iTimer--;
+
+	if ( m_iTimer == 67 )
+		pev->effects &= ~EF_NODRAW;		// Actor_SetScale( 0.01f )
+
+	// The flash doubles its speed at 40, 20 and 3 frames left, and pulses between 0 and 140 red
+	if ( m_iTimer == 3 || m_iTimer == 20 || m_iTimer == 40 )
+		m_iFlashSpeed >>= 1;
+	int speed = max( m_iFlashSpeed, 1 );
+	float step = 140.0f / speed;
+	if ( m_iTimer & ( m_iFlashSpeed + 1 ) )
+		m_flFlash = min( 140.0f, m_flFlash + step );
+	else
+		m_flFlash = max( 0.0f, m_flFlash - step );
+
+	if ( m_fOoT )
+	{
+		pev->skin = (int)( m_flFlash / 140.0f * ( ZL_BOMB_FLASH_SKINS - 1 ) + 0.5f );
+
+		// Swells by 0.002 a frame (20%) for the last 3 frames
+		if ( m_iTimer < 3 )
+			pev->scale = 1.0f + ( 3 - m_iTimer ) * 0.2f;
+
+		// The fuse: a spark on its tip every other frame (EffectSsGSpk_SpawnFuse, 17 units up
+		// from the bomb's base)
+		if ( m_iTimer < 63 && !( m_iTimer & 1 ) )
+		{
+			Vector tip = pev->origin + Vector( 0, 0, ZL_DIST( 17 - 7 ) );
+			MESSAGE_BEGIN( MSG_PVS, SVC_TEMPENTITY, tip );
+				WRITE_BYTE( TE_SPRITE );
+				WRITE_COORD( tip.x );
+				WRITE_COORD( tip.y );
+				WRITE_COORD( tip.z );
+				WRITE_SHORT( MODEL_INDEX( ZL_SPR_FLASH ) );
+				WRITE_BYTE( 1 );		// scale in 10ths
+				WRITE_BYTE( 200 );		// brightness
+			MESSAGE_END();
+		}
+	}
+	else if ( m_flFlash > 70.0f )
+	{
+		// Stock model: a red glow stands in for the flash
+		pev->renderfx = kRenderFxGlowShell;
+		pev->rendercolor = Vector( 255, 30, 30 );
+		pev->renderamt = 10;
+	}
+	else
+		pev->renderfx = kRenderFxNone;
 }
 
 void CZeldaBomb::Explode( void )
@@ -672,6 +752,23 @@ int CLinkPlayer::ZItemAmmo( int item )
 	}
 }
 
+// link.mdl bones 15 (L_Hand) and 18 (R_Hand), posed at Link's facing: the server's angles are
+// the camera's, the client draws him at fuser1 (ZL_LocalLinkFacing)
+BOOL CLinkPlayer::ZHandsMidpoint( Vector &out )
+{
+	if ( !strstr( STRING( pev->model ), "/link/" ) )
+		return FALSE;
+
+	Vector saved = pev->angles, l, r, ang;
+	pev->angles = Vector( 0, ZFacing(), 0 );
+	GetBonePosition( 15, l, ang );
+	GetBonePosition( 18, r, ang );
+	pev->angles = saved;
+
+	out = ( l + r ) * 0.5f;
+	return TRUE;
+}
+
 Vector CLinkPlayer::ZHandPosition( void )
 {
 	return pev->origin + ZForward() * 14 + Vector( 0, 0, 22 );
@@ -752,7 +849,11 @@ void CLinkPlayer::ZPullBomb( void )
 	pBomb->m_hHolder = this;
 	pBomb->pev->movetype = MOVETYPE_NOCLIP;
 	pBomb->pev->solid = SOLID_NOT;
-	UTIL_SetOrigin( pBomb->pev, pev->origin + Vector( 0, 0, 44 ) );
+	Vector hands;
+	if ( pBomb->m_fOoT && ZHandsMidpoint( hands ) )
+		UTIL_SetOrigin( pBomb->pev, hands + Vector( 0, 0, ZL_DIST( 7 ) ) );
+	else
+		UTIL_SetOrigin( pBomb->pev, pev->origin + Vector( 0, 0, 44 ) );
 
 	m_hZHeldBomb = pBomb;
 	ZSound( CHAN_ITEM, ZS_IT_PUT_AWAY, 0.6f );
@@ -1013,6 +1114,101 @@ static const zl_pickup_info_t sPickups[] =
 	{ ZL_MDL_CONTAINER,	1.4f, 255, 255, 255,	TRUE, "ITEM_DOUBLE_DEFENSE" },	// Great Fairy: double defense
 };
 
+// The item's own get-item model (make_object_models.py, sDrawItemTable), per zl_pickup_e.
+// Shown over Link's head when he gets it, and lying in the world instead of the stand-in.
+static const char *sPickupGI[] =
+{
+	"models/zelda/gi_rupee_green.mdl",
+	"models/zelda/gi_rupee_blue.mdl",
+	"models/zelda/gi_rupee_red.mdl",
+	"models/zelda/gi_rupee_purple.mdl",
+	"models/zelda/gi_heart.mdl",
+	"models/zelda/gi_arrows.mdl",
+	"models/zelda/gi_bomb.mdl",
+	"models/zelda/gi_nuts.mdl",
+	"models/zelda/gi_magic_small.mdl",
+	"models/zelda/gi_magic_large.mdl",
+	"models/zelda/gi_heart_container.mdl",
+	"models/zelda/gi_key.mdl",
+	"models/zelda/gi_bow.mdl",
+	"models/zelda/gi_bombbag.mdl",
+	"models/zelda/gi_hookshot.mdl",
+	"models/zelda/gi_longshot.mdl",
+	"models/zelda/gi_sword.mdl",			// OoT has no get-item Master Sword: the Kokiri Sword's
+	"models/zelda/gi_shield_hylian.mdl",
+	"models/zelda/gi_magic_large.mdl",		// magic meter (the Great Fairy gives it without a model)
+	"models/zelda/gi_heart_container.mdl",	// double defense (same)
+};
+static BOOL sPickupGIExists[ARRAYSIZE( sPickupGI )];
+
+static void ZL_PrecacheGetItemModels( void )
+{
+	for ( int i = 0; i < (int)ARRAYSIZE( sPickupGI ); i++ )
+	{
+		sPickupGIExists[i] = ZL_FileExists( sPickupGI[i] );
+		if ( sPickupGIExists[i] )
+			PRECACHE_MODEL( (char *)sPickupGI[i] );
+	}
+}
+
+static const char *ZL_PickupGIModel( int type )
+{
+	if ( type < 0 || type >= (int)ARRAYSIZE( sPickupGI ) || !sPickupGIExists[type] )
+		return NULL;
+	return sPickupGI[type];
+}
+
+/*
+=============================================================================
+ zl_gi_model: the item Link holds up (Player_DrawGetItemImpl)
+
+ Between his hands, 14 units up and 3.3 forward, turning 1000 binangs a frame, until he
+ puts it away.
+=============================================================================
+*/
+class CZeldaGetItemModel : public CBaseEntity
+{
+public:
+	void Spawn( void ) {}
+	void EXPORT FollowThink( void );
+	static CZeldaGetItemModel *Show( CLinkPlayer *pLink, const char *model );
+	EHANDLE m_hLink;
+};
+
+LINK_ENTITY_TO_CLASS( zl_gi_model, CZeldaGetItemModel );
+
+CZeldaGetItemModel *CZeldaGetItemModel::Show( CLinkPlayer *pLink, const char *model )
+{
+	CZeldaGetItemModel *p = GetClassPtr( (CZeldaGetItemModel *)NULL );
+	p->pev->classname = MAKE_STRING( "zl_gi_model" );
+	SET_MODEL( p->edict(), model );
+	p->pev->movetype = MOVETYPE_NOCLIP;
+	p->pev->solid = SOLID_NOT;
+	p->pev->angles = Vector( 0, pLink->ZFacing(), 0 );
+	p->pev->avelocity = Vector( 0, 1000.0f * ( 360.0f / 65536.0f ) * ZL_FPS, 0 );
+	p->m_hLink = pLink;
+	p->SetThink( &CZeldaGetItemModel::FollowThink );
+	p->FollowThink();
+	return p;
+}
+
+void CZeldaGetItemModel::FollowThink( void )
+{
+	CLinkPlayer *pLink = ZL_GetLink( m_hLink );
+	if ( !pLink || !pLink->IsAlive() || pLink->ZAction() != ZACT_GETITEM )
+	{
+		UTIL_Remove( this );
+		return;
+	}
+
+	Vector at;
+	if ( !pLink->ZHandsMidpoint( at ) )
+		at = pLink->pev->origin + Vector( 0, 0, pLink->pev->maxs.z );	// no link.mdl: the top of his head
+	at = at + pLink->ZForward() * ZL_DIST( 3.3f ) + Vector( 0, 0, ZL_DIST( 14 ) );
+	UTIL_SetOrigin( pev, at );
+	pev->nextthink = gpGlobals->time + 0.02f;
+}
+
 class CZeldaPickup : public CBaseEntity
 {
 public:
@@ -1030,14 +1226,17 @@ void CZeldaPickup::Spawn( void )
 {
 	const zl_pickup_info_t &info = sPickups[m_iType];
 
+	const char *gi = ZL_PickupGIModel( m_iType );
+
 	pev->movetype = MOVETYPE_TOSS;
 	pev->solid = SOLID_TRIGGER;
-	SET_MODEL( ENT( pev ), info.model );
-	UTIL_SetSize( pev, Vector( -12, -12, 0 ), Vector( 12, 12, 24 ) );
+	SET_MODEL( ENT( pev ), gi ? gi : info.model );
+	// The get-item models are centred on their origin: lift them off the floor
+	UTIL_SetSize( pev, Vector( -12, -12, gi ? -10 : 0 ), Vector( 12, 12, gi ? 14 : 24 ) );
 	UTIL_SetOrigin( pev, pev->origin );
-	pev->scale = info.scale;
+	pev->scale = gi ? 1.0f : info.scale;
 
-	if ( info.r || info.g || info.b )
+	if ( !gi && ( info.r || info.g || info.b ) )
 	{
 		pev->renderfx = kRenderFxGlowShell;
 		pev->rendercolor = Vector( info.r, info.g, info.b );
@@ -1163,8 +1362,14 @@ void CZeldaPickup::PickupTouch( CBaseEntity *pOther )
 		pLink->ZSetAction( ZACT_GETITEM );
 		pLink->ZStartMessage( info.message, NULL, 0 );
 
+		// Over his head in 3D when the model is there, otherwise the HUD shows the icon
+		const char *gi = ZL_PickupGIModel( m_iType );
+		if ( gi )
+			CZeldaGetItemModel::Show( pLink, gi );
+
 		MESSAGE_BEGIN( MSG_ONE, gmsgZItemGet, NULL, pLink->pev );
 			WRITE_BYTE( m_iType );
+			WRITE_BYTE( gi ? 1 : 0 );
 		MESSAGE_END();
 	}
 

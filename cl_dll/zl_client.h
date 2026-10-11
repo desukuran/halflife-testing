@@ -58,6 +58,7 @@ struct zl_client_t
 	// Item get
 	int		itemGetIcon;
 	float	itemGetTime;
+	int		itemGet3D;		// the server shows the item's own model over Link's head instead
 };
 
 extern zl_client_t g_zl;

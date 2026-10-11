@@ -306,11 +306,43 @@ def geo_bits(arg):
 
 class Material:
     __slots__ = ("tex", "w", "h", "mirror_s", "mirror_t", "clamp_s", "clamp_t", "tint", "textured", "alpha_tex", "solid",
-                 "chrome")
+                 "chrome", "cc", "prim", "env", "lod")
+
+    # FULL: bake the colour combiner per pixel, (A - B) * C + D for both cycles, instead of
+    # treating it as texture x colours. Needed for two-cycle blends such as the get-item
+    # rupees' lerp from ENVIRONMENT to PRIMITIVE. Off for Link, whose combiners are plain products.
+    FULL = False
 
     def key(self):
-        return (self.tex, self.mirror_s, self.mirror_t, self.tint, self.textured, self.alpha_tex, self.solid, self.chrome,
-                self.clamp_s, self.clamp_t)
+        k = (self.tex, self.mirror_s, self.mirror_t, self.tint, self.textured, self.alpha_tex, self.solid, self.chrome,
+             self.clamp_s, self.clamp_t)
+        if Material.FULL:
+            k += (self.cc, self.prim, self.env, self.lod)
+        return k
+
+
+def eval_combiner(cc, texel, prim, env, lod):
+    """One pixel through the RDP colour combiner. Colours are 0..1 tuples; SHADE counts as white."""
+    def inp(name, combined, i):
+        if name in ("TEXEL0", "TEXEL1"):
+            return texel[i]
+        if name == "PRIMITIVE":
+            return prim[i]
+        if name == "ENVIRONMENT":
+            return env[i]
+        if name in ("SHADE", "1"):
+            return 1.0
+        if name == "PRIM_LOD_FRAC":
+            return lod
+        if name == "COMBINED":
+            return combined[i]
+        return 0.0
+    combined = (0.0, 0.0, 0.0)
+    for cyc in cc:
+        a, b, c, d = cyc
+        combined = tuple(max(0.0, min(1.0, (inp(a, combined, i) - inp(b, combined, i)) * inp(c, combined, i) +
+                                       inp(d, combined, i))) for i in range(3))
+    return combined
 
 
 class DLRunner:
@@ -328,6 +360,7 @@ class DLRunner:
         self.cms = self.cmt = ""
         self.tscale = (1.0, 1.0)
         self.prim = (255, 255, 255)
+        self.lod = 0
         self.envc = self.env
         self.cc = (("TEXEL0", "0", "SHADE", "0"), ("0", "0", "0", "COMBINED"))
         self.geo = G_CULL_BACK | G_LIGHTING
@@ -384,6 +417,7 @@ class DLRunner:
                 self.cms, self.cmt = cms, cmt
             elif name == "gsDPSetPrimColor":
                 self.prim = (c_int(args[2]), c_int(args[3]), c_int(args[4]))
+                self.lod = c_int(args[1]) or 0
             elif name == "gsDPSetEnvColor":
                 self.envc = (c_int(args[0]), c_int(args[1]), c_int(args[2]))
             elif name == "gsDPSetCombineLERP":
@@ -417,6 +451,14 @@ class DLRunner:
             if src in inputs:
                 tint = [tint[i] * col[i] // 255 for i in range(3)]
         m.tint = tuple(tint)
+        m.cc, m.prim, m.env, m.lod = tuple(self.cc), tuple(self.prim), tuple(self.envc), self.lod
+        if Material.FULL:
+            used = {x for cyc in self.cc for x in cyc}
+            m.textured = bool(used & {"TEXEL0", "TEXEL1"}) and self.tex is not None
+            if not m.textured:
+                c = eval_combiner(m.cc, (1.0, 1.0, 1.0), [v / 255 for v in m.prim], [v / 255 for v in m.env], m.lod / 255)
+                tint = [int(v * 255 + 0.5) for v in c]
+            m.tint = tuple(tint) if not m.textured else (255, 255, 255)
         m.solid = not m.textured
         m.tex = self.tex if m.textured else None
         m.w, m.h = self.tex_w, self.tex_h
@@ -481,6 +523,20 @@ class TextureBank:
             img = Image.new("RGBA", (mat.w or 32, mat.h or 32), (160, 160, 160, 255))
         else:
             img = Image.open(path).convert("RGBA")
+        if Material.FULL and mat.cc:
+            prim = [v / 255 for v in mat.prim]
+            env = [v / 255 for v in mat.env]
+            lod = mat.lod / 255
+            lut = {}
+            px = img.load()
+            for yy in range(img.size[1]):
+                for xx in range(img.size[0]):
+                    r, g, b, a = px[xx, yy]
+                    if (r, g, b) not in lut:
+                        c = eval_combiner(mat.cc, (r / 255, g / 255, b / 255), prim, env, lod)
+                        lut[(r, g, b)] = tuple(int(v * 255 + 0.5) for v in c)
+                    px[xx, yy] = lut[(r, g, b)] + (a,)
+            return img
         if mat.tint != (255, 255, 255):
             r, g, b, a = img.split()
             r = r.point(lambda v, k=mat.tint[0]: v * k // 255)

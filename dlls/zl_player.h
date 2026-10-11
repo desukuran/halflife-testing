@@ -162,6 +162,7 @@ public:
 	BOOL	ZFirstPersonAim( void );
 	Vector	ZAimVector( void );
 	Vector	ZHandPosition( void );
+	BOOL	ZHandsMidpoint( Vector &out );	// between link.mdl's hands (sGetItemRefPos), FALSE without it
 
 	// HL weapons on C buttons
 	int		ZTranslateHLButtons( int raw );

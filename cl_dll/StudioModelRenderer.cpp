@@ -1212,6 +1212,19 @@ int CStudioModelRenderer::StudioDrawModel( int flags )
 	IEngineStudio.StudioSetHeader( m_pStudioHeader );
 	IEngineStudio.SetRenderModel( m_pRenderModel );
 
+	// Zelda: OoT's bomb is a disc that always faces the camera (EnBom_Draw: Matrix_ReplaceRotation
+	// with the billboard matrix). Its model's +X is the side that faces the viewer.
+	if ( m_pRenderModel && strstr( m_pRenderModel->name, "zelda/bomb.mdl" ) )
+	{
+		float flat = sqrtf( m_vNormal[0] * m_vNormal[0] + m_vNormal[1] * m_vNormal[1] );
+		vec3_t face;
+		face[PITCH] = atan2f( -m_vNormal[2], flat ) * ( 180.0f / M_PI );		// nose up toward the eye
+		face[YAW] = atan2f( -m_vNormal[1], -m_vNormal[0] ) * ( 180.0f / M_PI );
+		face[ROLL] = 0;
+		VectorCopy( face, m_pCurrentEntity->angles );
+		VectorCopy( face, m_pCurrentEntity->curstate.angles );
+	}
+
 	StudioSetUpTransform( 0 );
 
 	if (flags & STUDIO_RENDER)

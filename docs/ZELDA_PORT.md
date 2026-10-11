@@ -404,6 +404,8 @@ python3 tools/zelda/make_object_models.py --oot /path/to/oot --studiomdl /path/t
 This builds other OoT objects into `zelda/models/zelda/`:
 
 - `gossip_stone.mdl` from `object_gs`, one piece. The game squashes and stretches it through the entity's `fuser1` / `fuser2`, which the client renderer applies.
+- `bomb.mdl` from `gameplay_keep`'s `gBombCapDL` / `gBombBodyDL`. The body is a flat disc the client turns to face the camera (EnBom_Draw's billboard), and its red flash is 8 skins the server steps through on OoT's timer (it pulses faster at 40, 20 and 3 frames left, then swells for the last 3). A spark sits on the fuse. Without it, bombs are Half-Life grenades with a red glow.
+- `gi_*.mdl`, the get-item models from `sDrawItemTable`: bow, hookshot, longshot, bomb bag, heart container, recovery heart, small key, sword (OoT has no get-item Master Sword, so the Kokiri Sword's), Hylian Shield, magic jars, arrows, bombs, nuts and rupees. Their colours go through the RDP colour combiner per pixel (`(A - B) * C + D`, both cycles), since several are blends between two colours. When Link gets an item it spins over his head between his hands, 14 units up, like `Player_DrawGetItemImpl`; the same models replace the Half-Life stand-ins for pickups lying in the world.
 - `treasure_chest.mdl` from `object_box`: its 4 limb skeleton, the front and lid display lists where `EnBox_PostLimbDraw` draws them, and the opening animation (`gTreasureChestAnim_00024C`, read from the decomp's standard animation format) as the `open` sequence.
 
 ### Test map

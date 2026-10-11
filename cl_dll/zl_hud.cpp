@@ -301,6 +301,7 @@ int CHudZelda::MsgFunc_ZItemGet( const char *pszName, int iSize, void *pbuf )
 	};
 	g_zl.itemGetIcon = ( pickup >= 0 && pickup < (int)( sizeof( icons ) / sizeof( icons[0] ) ) ) ? icons[pickup] : ZICON_RUPEE;
 	g_zl.itemGetTime = gHUD.m_flTime;
+	g_zl.itemGet3D = READ_BYTE();
 	return 1;
 }
 
@@ -713,7 +714,7 @@ void CHudZelda::DrawAimCrosshair( void )
 // Item get: Link holds the item up while the text box is open
 void CHudZelda::DrawItemGet( float time )
 {
-	if ( ZL_PredictedAction() != ZACT_GETITEM || time - g_zl.itemGetTime > 30.0f )
+	if ( ZL_PredictedAction() != ZACT_GETITEM || time - g_zl.itemGetTime > 30.0f || g_zl.itemGet3D )
 		return;
 
 	float s = ZDraw_Scale();

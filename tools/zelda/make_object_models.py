@@ -16,6 +16,14 @@ fuser1 / fuser2, see StudioSetUpTransform).
                  (gTreasureChestAnim_00024C, the adult chest opening) at EnBox's scale 0.01
                  -> models/zelda/treasure_chest.mdl
 
+  bomb           gameplay_keep: gBombCapDL and gBombBodyDL as EnBom_Draw draws them (the body
+                 turned 90 degrees about X), at the bomb's scale 0.01. The body is a flat disc
+                 the game turns to face the camera; its red flash (PRIMITIVE added to the
+                 texture) becomes 8 skins -> models/zelda/bomb.mdl
+  gi_*           the item Link holds over his head (sDrawItemTable in z_draw.c), each item's
+                 display lists in its draw function's order, at Player_DrawGetItemImpl's
+                 scale 0.2 -> models/zelda/gi_<item>.mdl
+
 Skeletal objects use the decomp's standard animations (AnimationHeader: frame data plus joint
 indices, where an index below staticIndexMax is a constant and the rest are one value a frame).
 
@@ -48,7 +56,72 @@ OBJECTS = [
         "env": (0, 0, 0),                     # EnBox_Draw: gDPSetEnvColor( 0, 0, 0, 255 )
         "anims": [("idle", "gTreasureChestAnim_00024C", 0, True), ("open", "gTreasureChestAnim_00024C", None, False)],
     },
+    {
+        "name": "bomb",
+        "object": "gameplay_keep",
+        "scale": 0.01,                        # Actor_SetScale( 0.01f ) once the bomb is out
+        "dls": ["gBombCapDL", "gBombBodyDL"],
+        "rot_x90": ["gBombBodyDL"],           # Matrix_RotateZYX( 0x4000, 0, 0 ) before the body
+        "flash": "gBombBodyDL",
+    },
 ]
+
+# sDrawItemTable entries, display lists in the order their GetItem_Draw* function draws them
+# (the *ColorDL ones only set colours for the mesh after them)
+GI_ITEMS = [
+    ("gi_bow", ["gGiBowDL"]),                                   # GID_BOW, DrawOpa0
+    ("gi_hookshot", ["gGiHookshotDL"]),
+    ("gi_longshot", ["gGiLongshotDL"]),
+    ("gi_bombbag", ["gGiBombBag20BagColorDL", "gGiBombBagDL", "gGiBombBag20RingColorDL", "gGiBombBagRingDL"]),  # DrawOpa1023
+    ("gi_heart_container", ["gGiHeartBorderDL", "gGiHeartContainerDL"]),  # DrawXlu01
+    ("gi_heart", ["gGiRecoveryHeartDL"]),
+    ("gi_key", ["gGiSmallKeyDL"]),
+    ("gi_sword", ["gGiKokiriSwordDL"]),                         # OoT has no get-item Master Sword
+    ("gi_shield_hylian", ["gGiHylianShieldDL"]),
+    ("gi_magic_small", ["gGiMagicJarSmallDL"]),
+    ("gi_magic_large", ["gGiMagicJarLargeDL"]),
+    ("gi_arrows", ["gGiArrowMediumDL"]),
+    ("gi_bomb", ["gGiBombDL"]),
+    ("gi_nuts", ["gGiNutDL"]),
+    # DrawSmallRupee / DrawOpa10Xlu32: inner colour, inner, outer colour, outer
+    ("gi_rupee_green", ["gGiGreenRupeeInnerColorDL", "gGiRupeeInnerDL", "gGiGreenRupeeOuterColorDL", "gGiRupeeOuterDL"]),
+    ("gi_rupee_blue", ["gGiBlueRupeeInnerColorDL", "gGiRupeeInnerDL", "gGiBlueRupeeOuterColorDL", "gGiRupeeOuterDL"]),
+    ("gi_rupee_red", ["gGiRedRupeeInnerColorDL", "gGiRupeeInnerDL", "gGiRedRupeeOuterColorDL", "gGiRupeeOuterDL"]),
+    ("gi_rupee_purple", ["gGiPurpleRupeeInnerColorDL", "gGiRupeeInnerDL", "gGiPurpleRupeeOuterColorDL", "gGiRupeeOuterDL"]),
+]
+for _name, _dls in GI_ITEMS:
+    OBJECTS.append({"name": _name, "object": None, "scale": 0.2, "dls": _dls})
+
+FLASH_LEVELS = 8        # EnBom flashIntensity 0..140 in this many steps
+
+
+def find_object(extracted, dl_name):
+    """The object folder a display list was extracted into."""
+    root = os.path.join(extracted, "assets", "objects")
+    for d in sorted(os.listdir(root)):
+        if os.path.exists(os.path.join(root, d, dl_name + ".inc.c")):
+            return d
+    return None
+
+
+def make_flash_skins(src, bmp, levels):
+    """EnBom_Draw: colour = PRIMITIVE + TEXEL0 with PRIMITIVE (flashIntensity, 0, 40). Returns
+    the skin names, the plain one (intensity 0) first."""
+    from PIL import Image
+    img = Image.open(os.path.join(src, bmp))
+    mask = [i == 255 for i in img.getdata()]
+    rgb = img.convert("RGB")
+    names = []
+    for k in range(levels):
+        flash = round(140 * k / (levels - 1))
+        out = Image.new("RGBA", rgb.size)
+        px = [(min(255, r + flash), g, min(255, b + 40), 0 if mask[i] else 255)
+              for i, (r, g, b) in enumerate(rgb.getdata())]
+        out.putdata(px)
+        name = bmp if k == 0 else bmp[:-4] + f"_f{k}.bmp"
+        L.save_bmp8(out, os.path.join(src, name), True)
+        names.append(name)
+    return names
 
 
 class ObjectAssets(L.Assets):
@@ -112,6 +185,12 @@ def read_standard_anim(assets, name, limb_count):
 
 
 def build(obj, extracted, src_root, out_dir, studiomdl, preview):
+    L.Material.FULL = obj["name"].startswith("gi_")    # their colours are combiner blends
+    if not obj["object"]:
+        obj = dict(obj, object=find_object(extracted, obj["dls"][-1]))
+        if not obj["object"]:
+            print(f"{obj['name']}: {obj['dls'][-1]} not extracted")
+            return False
     assets = ObjectAssets(extracted, obj["object"])
     if not os.path.isdir(assets.obj):
         print(f"{obj['name']}: {assets.obj} not extracted")
@@ -125,6 +204,7 @@ def build(obj, extracted, src_root, out_dir, studiomdl, preview):
     L.FEET_Z = 0.0
     runner = L.DLRunner(assets, [0], obj.get("env", (255, 255, 255)))
 
+    flash_tris = None
     if "limbs" in obj:
         limbs = parse_limbs(assets, obj["limbs"])
         L.BONE_NAMES = obj["bones"]
@@ -142,9 +222,26 @@ def build(obj, extracted, src_root, out_dir, studiomdl, preview):
         # One bone at the feet
         L.BONE_NAMES = ["root"]
         limbs = [{"name": "root", "joint": [0, 0, 0], "parent": -1, "child": 255, "sibling": 255, "dl": None}]
-        runner.run(obj["dls"][0], 0)
-        for dl in obj["dls"][1:]:
-            runner._run(dl, 0)          # the vertex cache carries over between them, like on the N64
+        for i, dl in enumerate(obj["dls"]):
+            first = len(runner.tris)
+            if i == 0:
+                runner.run(dl, 0)
+            else:
+                runner._run(dl, 0)      # the vertex cache carries over between them, like on the N64
+            if dl in obj.get("rot_x90", ()):
+                # Rx(90 degrees): (x, y, z) -> (x, -z, y), positions and normals
+                for t in range(first, len(runner.tris)):
+                    mat, vs, two = runner.tris[t]
+                    vs = [(v[0], (v[1][0], -v[1][2], v[1][1]), (v[2][0], -v[2][2], v[2][1])) + tuple(v[3:]) for v in vs]
+                    runner.tris[t] = (mat, vs, two)
+            if dl == obj.get("flash"):
+                # PRIMITIVE + TEXEL0 isn't a plain tint: keep the texture, the skins add the colour
+                flash_tris = range(first, len(runner.tris))
+                for t in flash_tris:
+                    mat = runner.tris[t][0]
+                    mat.textured, mat.solid, mat.alpha_tex = True, False, True
+                    mat.tex, mat.tint = runner.tex, (255, 255, 255)
+                    mat.mirror_s, mat.mirror_t = "G_TX_MIRROR" in runner.cms, "G_TX_MIRROR" in runner.cmt
         sequences = [("idle", [([0, 0, 0], [(0.0, 0.0, 0.0)], 0)], True)]
 
     bank = L.TextureBank(assets, src)
@@ -162,8 +259,19 @@ def build(obj, extracted, src_root, out_dir, studiomdl, preview):
         "$origin 0 0 0 -90",                 # cancel studiomdl's default 90 degree turn
         '$body "body" "body"',
     ]
+    skins = None
+    if obj.get("flash") and flash_tris:
+        mat = runner.tris[flash_tris[0]][0]
+        body_bmp = [info[0] for key, info in bank.made.items() if key[0] == mat.tex][0]
+        skins = make_flash_skins(src, body_bmp, FLASH_LEVELS)
+        bank.masked.update(skins)
     for t in sorted(bank.masked):
         qc.append(f'$texrendermode "{t}" masked')
+    if skins:
+        qc.append("$texturegroup flash")
+        qc.append("{")
+        qc += ['{ "%s" }' % k for k in skins]
+        qc.append("}")
     for seq, frames, loop in sequences:
         qc.append(f'$sequence "{seq}" "anims/{seq}" fps 20' + (" loop" if loop else ""))
     with open(os.path.join(src, f"{obj['name']}.qc"), "w", newline="\n") as f:
