@@ -1756,7 +1756,8 @@ void UpdateClientData ( const edict_t *ent, int sendweapons, struct clientdata_s
 		if ( pl )
 		{
 			cd->m_flNextAttack	= pl->m_flNextAttack;
-			cd->fuser2			= pl->m_flNextAmmoBurn;
+			if ( !( pl->pev->iuser3 & ZSF_ACTIVE ) )	// Zelda: fuser2 is Link's footstep phase
+				cd->fuser2		= pl->m_flNextAmmoBurn;
 			cd->fuser3			= pl->m_flAmmoStartCharge;
 			cd->vuser1.x		= pl->ammo_9mm;
 			cd->vuser1.y		= pl->ammo_357;

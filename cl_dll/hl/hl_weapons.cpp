@@ -901,7 +901,9 @@ void HUD_WeaponsPostThink( local_state_s *from, local_state_s *to, usercmd_t *cm
 	to->client.fov						= player.pev->fov;
 	to->client.weaponanim				= player.pev->weaponanim;
 	to->client.m_flNextAttack			= player.m_flNextAttack;
-	to->client.fuser2					= player.m_flNextAmmoBurn;
+	// Zelda: fuser2 is Link's footstep phase (PMZ_Footsteps), not the egon's ammo timer
+	if ( !( from->client.iuser3 & ZSF_ACTIVE ) )
+		to->client.fuser2				= player.m_flNextAmmoBurn;
 	to->client.fuser3					= player.m_flAmmoStartCharge;
 	to->client.maxspeed					= player.pev->maxspeed;
 
@@ -1024,10 +1026,13 @@ void HUD_WeaponsPostThink( local_state_s *from, local_state_s *to, usercmd_t *cm
 		to->client.m_flNextAttack = -0.001;
 	}
 
-	to->client.fuser2 -= cmd->msec / 1000.0;
-	if ( to->client.fuser2 < -0.001 )
+	if ( !( from->client.iuser3 & ZSF_ACTIVE ) )
 	{
-		to->client.fuser2 = -0.001;
+		to->client.fuser2 -= cmd->msec / 1000.0;
+		if ( to->client.fuser2 < -0.001 )
+		{
+			to->client.fuser2 = -0.001;
+		}
 	}
 	
 	to->client.fuser3 -= cmd->msec / 1000.0;
