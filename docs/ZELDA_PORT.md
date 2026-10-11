@@ -36,7 +36,7 @@ Link is played with the OoT pad layout. Every control is an ordinary bind, so a 
 | Stick | `+forward/+back/+moveleft/+moveright` | WASD | Camera relative movement. `CTRL` walks (half stick). |
 | A | `+zbtn_a` | SPACE | Context action: roll, sidehop, backflip, jump attack, speak, check, open, climb, put away. |
 | B | `+zbtn_b` | MOUSE1 | Sword. Combos, jump attack, spin attack by holding. |
-| Z | `+zbtn_z` | MOUSE2 | Z-target. Hold, or toggle with `zl_ztoggle 1`. With nothing targeted it snaps the camera behind Link. |
+| Z | `+zbtn_z` | MOUSE2 | Z-target. Hold, or toggle with `zl_ztoggle 1`. With nothing targeted it snaps the camera behind Link. Z + A: sidehop, backflip, or jump attack with the stick forward. |
 | R | `+zbtn_r` | SHIFT | Shield. |
 | C-left | `+zbtn_cleft` | Q | Item |
 | C-down | `+zbtn_cdown` | R | Item |
@@ -58,7 +58,7 @@ Equip items with `zl_equip <0|1|2> <item number>` (C-left, C-down, C-right; item
 | `zl_dmg_out_scale` | 10 | OoT damage (sword 1/2/4, ...) × this = HL damage dealt to monsters. |
 | `zl_ztoggle` | 0 | Z-targeting: 0 = hold (OoT "Hold"), 1 = toggle (OoT "Switch"). |
 | `zl_model` | `models/player/link/link.mdl` | Player model. If the file doesn't exist (you haven't built it yet), `models/player.mdl` is used. |
-| `zl_sfx_oot` | -1 | OoT sounds from `sound/zelda/oot/`: -1 = whenever `extract_sfx.py`'s output is installed, 1 = always, 0 = never (Half-Life stand-ins). Takes effect on map load. |
+| `zl_oot_sounds` | 1 | 1 = each sound uses its OoT file from `sound/zelda/oot/` when the file exists, else the Half-Life stand-in. 0 = Half-Life only. Decided when the map loads, together with what gets precached (only the set in use, about 75 files). |
 | `zl_hl_suit` | 0 | 1 = also give the HEV suit (HL HUD and voice). |
 | `zl_drops` | 1 | Monsters drop hearts, rupees and ammo when killed. |
 | `zl_hookshot_any` | 1 | 1 = the hookshot sticks to any surface. 0 = OoT rules: only hookable surfaces, here textures with `wood`, `crate`, `hook` or `tree` in the name. |
@@ -72,7 +72,9 @@ Equip items with `zl_equip <0|1|2> <item number>` (C-left, C-down, C-right; item
 | `zl_hud_draw` | 0 | 0 = TriAPI quads (scaled and anchored to a 320×240 virtual N64 screen). 1 = SPR_DrawGeneric fallback, for renderers where TriAPI misbehaves in 2D. |
 | `zl_hud_gc` | 0 | 1 = GameCube button colours (green A, red B). |
 | `zl_hud_scale` | 1 | Multiplies the automatic scale (screen height ÷ 240). |
-| `zl_cam_follow` | 1 | Camera swings behind Link while he runs (Camera_Normal1). |
+| `zl_cam_style` | 1 | 1 = mouse camera: only the mouse turns it, so W always runs away from the camera (best on keyboard). 0 = OoT's camera, which Link drags around and which swings behind him by itself (best on a stick). Z-targeting works the same in both. |
+| `zl_cam_follow` | 1 | OoT camera only: swing behind Link while he runs (Camera_Normal1). |
+| `zl_autobind` | 1 | The first time you play as Link the client runs `zl_binds.cfg` and sets this to 0. A mod without its own `config.cfg` inherits Half-Life's, where MOUSE2 isn't Z. |
 | `zl_cam_mouse` | 1 | The mouse orbits the camera. |
 | `zl_cam_dist` | 1 | Multiplies OoT's camera distance band (144–216). |
 | `zl_text_speed` | 45 | Text box characters per second. |
@@ -228,7 +230,7 @@ If `zl_model` points at a model that has the `link_*` sequence names (see [Link'
 
 Every sound Link makes is listed in `pm_shared/zl_sounds.h` with a Half-Life stand-in, the OoT `NA_SE_*` it replaces, and that sound's random pitch from OoT's SFX tables (`Audio_ComputeSfxFreqScale`). The random pitch applies to the stand-ins as well.
 
-The game switches to `sound/zelda/oot/<NA_SE name>.wav` as soon as `tools/zelda/extract_sfx.py` has been run (`zl_sfx_oot -1`, the default). Use `zl_sfx_oot 1` or `0` to force it on or off.
+Each sound plays `sound/zelda/oot/<NA_SE name>.wav` when that file exists (made by `tools/zelda/extract_sfx.py`), else its Half-Life stand-in. `zl_oot_sounds 0` forces the stand-ins. The server decides this when the map loads and precaches only what it chose; the console prints how many of each.
 
 Footsteps follow OoT's walk cycle (`func_8084029C`). Their frequency (0.9 to 1.1) and volume come from Link's speed, and `NA_SE_PL_WALK_GROUND` adds up to 16% random pitch on top.
 

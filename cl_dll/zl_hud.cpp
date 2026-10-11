@@ -80,22 +80,13 @@ float ZL_PredictedFacing( void )
 void ZL_PlaySound( int sound, float volume )
 {
 	char path[128];
-	const char *sample;
 
 	if ( sound < 0 || sound >= ZS_COUNT )
 		return;
 
-	// The server says whether OoT sounds are in use (zl_sfx_oot can be "auto")
-	const char *zs = gEngfuncs.PhysInfo_ValueForKey( "zs" );
-	if ( zs && atoi( zs ) )
-	{
-		int takes = ZL_SoundTakes( gEngfuncs.PhysInfo_ValueForKey( "zv" ), sound );
-		ZL_OoTSoundPath( path, sizeof( path ), sound, takes > 1 ? gEngfuncs.pfnRandomLong( 1, takes ) : 1 );
-		sample = path;
-	}
-	else
-		sample = g_zlSounds[sound].hl;
-
+	// The server decided at precache which sounds are OoT ones ("zv", see zl_sounds.h)
+	const char *sample = ZL_SoundSample( path, sizeof( path ), gEngfuncs.PhysInfo_ValueForKey( "zv" ), sound,
+										 gEngfuncs.pfnRandomLong( 0, 0x7FFF ) );
 	gEngfuncs.pfnPlaySoundByName( (char *)sample, volume );
 }
 

@@ -203,16 +203,8 @@ static void PMZ_SoundEx( int channel, int id, float vol, float freq )
 	if ( !pmove->runfuncs )
 		return;
 
-	if ( atoi( pmove->PM_Info_ValueForKey( pmove->physinfo, "zs" ) ) )
-	{
-		int takes = ZL_SoundTakes( pmove->PM_Info_ValueForKey( pmove->physinfo, "zv" ), id );
-		ZL_OoTSoundPath( path, sizeof( path ), id, takes > 1 ? pmove->RandomLong( 1, takes ) : 1 );
-		sample = path;
-	}
-	else
-	{
-		sample = g_zlSounds[id].hl;
-	}
+	sample = ZL_SoundSample( path, sizeof( path ), pmove->PM_Info_ValueForKey( pmove->physinfo, "zv" ), id,
+							 pmove->RandomLong( 0, 0x7FFF ) );
 
 	pmove->PM_PlaySound( channel, sample, vol, ATTN_NORM, 0, ZL_SoundPitch( id, freq, pmove->RandomLong( 0, 0x7FFF ) ) );
 }

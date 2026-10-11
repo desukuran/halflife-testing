@@ -4,9 +4,9 @@
 *
 *	Every sound the port plays goes through this table. The first column is a stock Half-Life
 *	sound that ships with the game; the second is the OoT sound effect it stands in for.
-*	When zl_sfx_oot is 1 the OoT column is used instead, as sound/zelda/oot/<NAME>.wav.
-*	Those files come out of tools/zelda/rip_sfx.py and your own ROM. They are not
-*	distributed with this mod.
+*	When sound/zelda/oot/<NAME>.wav exists (tools/zelda/extract_sfx.py makes them from your
+*	own ROM; they are not distributed with this mod) that sound is used instead, unless
+*	zl_oot_sounds is 0.
 *
 *	OoT names are the SFX enum names from include/sfx.h / include/tables/sfx/ headers in the decomp.
 *
@@ -193,11 +193,20 @@ static float ZL_SoundFreq( int id, int rnd )
 }
 
 /*
- OoT picks between several takes of Link's voice clips (NA_SE_VO_LI_SWORD_N has four).
- tools/zelda/extract_sfx.py writes them as NAME.wav, NAME_2.wav ... and variants.txt; the
- server turns that into the "zv" physinfo key, one digit per sound id ('1' = one take), so
- the movement code and the client pick the same way. take is 1-based.
+ Which file each sound plays. The server decides once per map, when it precaches
+ (ZL_PrecacheAll), and publishes it as the "zv" physinfo key: one character per sound id,
+ '0' = the Half-Life stand-in, '1'..'9' = how many OoT takes there are (OoT picks between
+ several takes of Link's voice clips; NA_SE_VO_LI_SWORD_N has four, written as NAME.wav,
+ NAME_2.wav ... by extract_sfx.py). The movement code, the client and the server all build
+ the sample name from it, so only what was precached is ever played.
 */
+static int ZL_SoundTakes( const char *zv, int id )
+{
+	if ( !zv || id < 0 || id >= (int)strlen( zv ) )
+		return 0;
+	return ( zv[id] >= '1' && zv[id] <= '9' ) ? zv[id] - '0' : 0;
+}
+
 static void ZL_OoTSoundPath( char *out, int size, int id, int take )
 {
 	if ( take > 1 )
@@ -206,11 +215,16 @@ static void ZL_OoTSoundPath( char *out, int size, int id, int take )
 		snprintf( out, size, "zelda/oot/%s.wav", g_zlSounds[id].oot );
 }
 
-static int ZL_SoundTakes( const char *zv, int id )
+// The sample to play for sound id; rnd picks the take. out must hold 96 characters.
+static const char *ZL_SoundSample( char *out, int size, const char *zv, int id, int rnd )
 {
-	if ( !zv || id < 0 || id >= (int)strlen( zv ) )
-		return 1;
-	return ( zv[id] >= '2' && zv[id] <= '9' ) ? zv[id] - '0' : 1;
+	int takes = ZL_SoundTakes( zv, id );
+	if ( id < 0 || id >= ZS_COUNT )
+		return "common/null.wav";
+	if ( !takes )
+		return g_zlSounds[id].hl;
+	ZL_OoTSoundPath( out, size, id, 1 + ( rnd & 0x7FFF ) % takes );
+	return out;
 }
 
 // Half-Life pitch (100 = normal) for a sound played at freqScale

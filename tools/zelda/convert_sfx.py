@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Zelda 64 port: prepare OoT sound effects for zl_sfx_oot 1.
+Zelda 64 port: prepare your own recordings of OoT sound effects (extract_sfx.py renders them from the ROM instead).
 
 The game looks for sound/zelda/oot/<SFX NAME>.wav, one file per entry in
 pm_shared/zl_sounds.h (NA_SE_PL_ROLL.wav, NA_SE_IT_SWORD_SWING.wav, ...).
@@ -121,7 +121,7 @@ def main():
     missing = [n for n in wanted if n.upper() not in have]
     print(f"converted {done}/{len(wanted)} into {args.out}")
     if missing:
-        print("still missing (the Half-Life stand-in plays instead only if zl_sfx_oot is 0):")
+        print("still missing (those play their Half-Life stand-in):")
         for n in missing:
             print("  " + n)
 

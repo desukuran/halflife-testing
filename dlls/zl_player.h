@@ -189,7 +189,7 @@ void ZL_PrecacheAll( void );
 void ZL_EmitSound( edict_t *pEdict, int channel, int sound, float volume, float attn, int pitch );
 const char *ZL_SoundPath( int sound );
 const char *ZL_SoundTakesKey( void );
-BOOL ZL_UseOoTSounds( void );		// zl_sfx_oot, with -1 = whenever extract_sfx.py's output is there	// "zv" physinfo: takes per sound id
+	// "zv" physinfo: takes per sound id
 
 // Damage translation (zl_combat.cpp)
 int		ZL_HLDamageToHealth( float flDamage, int bitsDamageType );
@@ -214,7 +214,7 @@ extern cvar_t zl_dmg_out_scale;
 extern cvar_t zl_ztoggle;
 extern cvar_t zl_model;
 const char *ZL_PlayerModel( void );	// zl_model if the file exists, else models/player.mdl
-extern cvar_t zl_sfx_oot;
+extern cvar_t zl_oot_sounds;
 extern cvar_t zl_hl_suit;
 extern cvar_t zl_drops;
 extern cvar_t zl_hookshot_any;

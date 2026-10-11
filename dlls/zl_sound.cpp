@@ -13,32 +13,12 @@
 
 void ZL_PrecacheItems( void );
 
-static int s_zlTakes[ZS_COUNT];		// takes per OoT sound, from sound/zelda/oot/variants.txt
-static char s_zlTakesKey[ZS_COUNT + 1];	// the same as the "zv" physinfo string
-static BOOL s_zlOoTInstalled;			// variants.txt found: extract_sfx.py has been run
-
-BOOL ZL_UseOoTSounds( void )
-{
-	if ( zl_sfx_oot.value < 0 )
-		return s_zlOoTInstalled;
-	return zl_sfx_oot.value != 0;
-}
+static char s_zlTakesKey[ZS_COUNT + 1];	// the "zv" physinfo string (zl_sounds.h), decided at precache
 
 const char *ZL_SoundPath( int sound )
 {
 	static char path[96];
-
-	if ( sound < 0 || sound >= ZS_COUNT )
-		return "common/null.wav";
-
-	if ( ZL_UseOoTSounds() )
-	{
-		int takes = s_zlTakes[sound] > 1 ? s_zlTakes[sound] : 1;
-		ZL_OoTSoundPath( path, sizeof( path ), sound, takes > 1 ? RANDOM_LONG( 1, takes ) : 1 );
-		return path;
-	}
-
-	return g_zlSounds[sound].hl;
+	return ZL_SoundSample( path, sizeof( path ), s_zlTakesKey, sound, RANDOM_LONG( 0, 0x7FFF ) );
 }
 
 const char *ZL_SoundTakesKey( void )
@@ -46,43 +26,54 @@ const char *ZL_SoundTakesKey( void )
 	return s_zlTakesKey;
 }
 
-// sound/zelda/oot/variants.txt: "NA_SE_VO_LI_SWORD_N 4" lines
-static void ZL_LoadSoundTakes( void )
+static BOOL ZL_FileExists( const char *path )
 {
+	int len = 0;
+	byte *data = LOAD_FILE_FOR_ME( (char *)path, &len );
+	if ( !data )
+		return FALSE;
+	FREE_FILE( data );
+	return TRUE;
+}
+
+// Per sound: the OoT file if it's there (and zl_oot_sounds isn't 0), else the Half-Life one.
+// sound/zelda/oot/variants.txt ("NA_SE_VO_LI_SWORD_N 4" lines) gives the extra takes.
+static void ZL_ChooseSounds( void )
+{
+	int takes[ZS_COUNT];
 	for ( int i = 0; i < ZS_COUNT; i++ )
-	{
-		s_zlTakes[i] = 1;
-		s_zlTakesKey[i] = '1';
-	}
-	s_zlTakesKey[ZS_COUNT] = 0;
+		takes[i] = 1;
 
 	int len = 0;
 	char *data = (char *)LOAD_FILE_FOR_ME( (char *)"sound/zelda/oot/variants.txt", &len );
-	s_zlOoTInstalled = data != NULL;
-	if ( !data )
-		return;
-
-	char *text = (char *)malloc( len + 1 );
-	memcpy( text, data, len );
-	text[len] = 0;
-	FREE_FILE( data );
-
-	for ( char *line = strtok( text, "\r\n" ); line; line = strtok( NULL, "\r\n" ) )
+	if ( data )
 	{
-		char name[64];
-		int count;
-		if ( line[0] == '/' || sscanf( line, "%63s %d", name, &count ) != 2 )
-			continue;
-		for ( int i = 0; i < ZS_COUNT; i++ )
+		char *text = (char *)malloc( len + 1 );
+		memcpy( text, data, len );
+		text[len] = 0;
+		FREE_FILE( data );
+
+		for ( char *line = strtok( text, "\r\n" ); line; line = strtok( NULL, "\r\n" ) )
 		{
-			if ( !strcmp( g_zlSounds[i].oot, name ) )
-			{
-				s_zlTakes[i] = max( 1, min( 9, count ) );
-				s_zlTakesKey[i] = '0' + s_zlTakes[i];
-			}
+			char name[64];
+			int count;
+			if ( line[0] == '/' || sscanf( line, "%63s %d", name, &count ) != 2 )
+				continue;
+			for ( int i = 0; i < ZS_COUNT; i++ )
+				if ( !strcmp( g_zlSounds[i].oot, name ) )
+					takes[i] = max( 1, min( 9, count ) );
 		}
+		free( text );
 	}
-	free( text );
+
+	for ( int i = 0; i < ZS_COUNT; i++ )
+	{
+		char path[128];
+		snprintf( path, sizeof( path ), "sound/zelda/oot/%s.wav", g_zlSounds[i].oot );
+		BOOL oot = zl_oot_sounds.value != 0 && ZL_FileExists( path );
+		s_zlTakesKey[i] = oot ? (char)( '0' + takes[i] ) : '0';
+	}
+	s_zlTakesKey[ZS_COUNT] = 0;
 }
 
 void ZL_EmitSound( edict_t *pEdict, int channel, int sound, float volume, float attn, int pitch )
@@ -125,22 +116,28 @@ void ZL_PrecacheAll( void )
 	if ( !ZL_Enabled() )
 		return;
 
-	ZL_LoadSoundTakes();
+	// Decided once per map: switching zl_oot_sounds takes effect on the next map load, so a
+	// sound that wasn't precached is never asked for
+	ZL_ChooseSounds();
+	int nOoT = 0, nHL = 0;
 	for ( int i = 0; i < ZS_COUNT; i++ )
 	{
-		if ( ZL_UseOoTSounds() )
+		int takes = ZL_SoundTakes( s_zlTakesKey, i );
+		if ( !takes )
 		{
-			// Every take; the path buffers have to outlive the precache call
-			for ( int t = 1; t <= s_zlTakes[i]; t++ )
-			{
-				char path[96];
-				ZL_OoTSoundPath( path, sizeof( path ), i, t );
-				PRECACHE_SOUND( (char *)STRING( ALLOC_STRING( path ) ) );
-			}
-		}
-		else
 			PRECACHE_SOUND( (char *)g_zlSounds[i].hl );
+			nHL++;
+			continue;
+		}
+		for ( int t = 1; t <= takes; t++ )
+		{
+			char path[96];
+			ZL_OoTSoundPath( path, sizeof( path ), i, t );
+			PRECACHE_SOUND( (char *)STRING( ALLOC_STRING( path ) ) );	// the name has to outlive this call
+			nOoT++;
+		}
 	}
+	ALERT( at_console, "Zelda: precached %d OoT sound files and %d Half-Life stand-ins\n", nOoT, nHL );
 
 	PRECACHE_MODEL( (char *)ZL_PlayerModel() );
 

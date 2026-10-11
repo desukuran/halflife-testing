@@ -128,6 +128,21 @@ static int ZInput_Pad( int buttons )
 void ZInput_PreCreateMove( void )
 {
 	static int forced;
+
+	// First time as Link: put the N64 layout on the keys. A mod without its own config.cfg
+	// gets Half-Life's (the file system falls back to valve/), where MOUSE2 is +attack2 (C-left
+	// here) instead of Z, and default.cfg never runs. zl_autobind is saved as 0 afterwards, so
+	// your own changes stick; "exec zl_binds.cfg" puts the layout back any time.
+	static cvar_t *zl_autobind;
+	if ( !zl_autobind )
+		zl_autobind = CVAR_CREATE( "zl_autobind", "1", FCVAR_ARCHIVE );
+	if ( zl_autobind->value && ZL_IsLink() )
+	{
+		gEngfuncs.Cvar_Set( (char *)"zl_autobind", (char *)"0" );
+		gEngfuncs.pfnClientCmd( (char *)"exec zl_binds.cfg\n" );
+		gEngfuncs.Con_Printf( "Zelda: N64 controls bound (zl_binds.cfg). Z is MOUSE2.\n" );
+	}
+
 	if ( ZL_IsLink() )
 	{
 		in_mlook.state |= 1;

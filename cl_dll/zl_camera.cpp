@@ -81,6 +81,7 @@ struct zl_camera_t
 
 static zl_camera_t s_cam;
 
+static cvar_t *zl_cam_style;
 static cvar_t *zl_cam_follow;
 static cvar_t *zl_cam_mouse;
 static cvar_t *zl_cam_dist;
@@ -88,7 +89,8 @@ static cvar_t *zl_cam_dist;
 void ZCam_Init( void )
 {
 	memset( &s_cam, 0, sizeof( s_cam ) );
-	zl_cam_follow = CVAR_CREATE( "zl_cam_follow", "1", FCVAR_ARCHIVE );	// OoT auto swing behind Link
+	zl_cam_style = CVAR_CREATE( "zl_cam_style", "1", FCVAR_ARCHIVE );	// 1 mouse camera, 0 OoT camera (drags / swings by itself)
+	zl_cam_follow = CVAR_CREATE( "zl_cam_follow", "1", FCVAR_ARCHIVE );	// OoT camera: auto swing behind Link
 	zl_cam_mouse = CVAR_CREATE( "zl_cam_mouse", "1", FCVAR_ARCHIVE );	// mouse orbits the camera
 	zl_cam_dist = CVAR_CREATE( "zl_cam_dist", "1", FCVAR_ARCHIVE );		// distance multiplier
 }
@@ -322,6 +324,19 @@ void ZCam_CalcRefdef( struct ref_params_s *pparams )
 	{
 	default:
 	case ZCAM_NORMAL:
+	if ( !zl_cam_style || zl_cam_style->value )
+	{
+		// Mouse camera (zl_cam_style 1): only the mouse turns it, so the stick directions stay
+		// put on screen: W runs away from the camera, A to its left, whatever Link is doing.
+		// Distance, height and Z's snap behind Link are OoT's; the drag and auto swing below,
+		// which make keyboard directions wander, are left out.
+		s_cam.orbitYaw += mouseYaw;
+		s_cam.orbitPitch = max( -40.0f, min( 75.0f, s_cam.orbitPitch + mousePitch ) );
+		s_cam.dist = ZCam_Approach( s_cam.dist, ( NORM1_DIST_MIN + NORM1_DIST_MAX ) * 0.5f * distScale, 4.0f, dt );
+		eye = ZCam_OrbitPoint( at, s_cam.orbitYaw, s_cam.orbitPitch, s_cam.dist );
+		break;
+	}
+	else
 	{
 		// Derive the orbit from where the eye was: Link running away drags it, running at it
 		// pushes it back (Camera_ClampDist)
