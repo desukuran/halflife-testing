@@ -57,7 +57,7 @@ Equip items with `zl_equip <0|1|2> <item number>` (C-left, C-down, C-right; item
 | `zl_dmg_in_scale` | 0.8 | HL damage × this ÷ 4, rounded up to whole quarter hearts (minimum ¼ heart, maximum 4 hearts). |
 | `zl_dmg_out_scale` | 10 | OoT damage (sword 1/2/4, ...) × this = HL damage dealt to monsters. |
 | `zl_ztoggle` | 0 | Z-targeting: 0 = hold (OoT "Hold"), 1 = toggle (OoT "Switch"). |
-| `zl_model` | `models/player/link/link.mdl` | Player model. If the file doesn't exist (you haven't built it yet), `models/player.mdl` is used. |
+| `zl_model` | `auto` | `auto` = `models/player/link/link.mdl` once you've built it (`make_link_model.py`), else `models/player.mdl`. `hl` = always `player.mdl`. Or any model path. The old saved default `models/player.mdl` also counts as `auto`. |
 | `zl_oot_sounds` | 1 | 1 = each sound uses its OoT file from `sound/zelda/oot/` when the file exists, else the Half-Life stand-in. 0 = Half-Life only. Decided when the map loads, together with what gets precached (only the set in use, about 75 files). |
 | `zl_hl_suit` | 0 | 1 = also give the HEV suit (HL HUD and voice). |
 | `zl_drops` | 1 | Monsters drop hearts, rupees and ammo when killed. |
@@ -72,6 +72,7 @@ Equip items with `zl_equip <0|1|2> <item number>` (C-left, C-down, C-right; item
 | `zl_hud_draw` | 0 | 0 = TriAPI quads (scaled and anchored to a 320×240 virtual N64 screen). 1 = SPR_DrawGeneric fallback, for renderers where TriAPI misbehaves in 2D. |
 | `zl_hud_gc` | 0 | 1 = GameCube button colours (green A, red B). |
 | `zl_hud_scale` | 1 | Multiplies the automatic scale (screen height ÷ 240). |
+| `zl_hud_wide` | 0 | 0 = the N64's 4:3 layout, centred (buttons as close to the hearts as on a TV). 1 = hearts on the left edge, buttons on the right edge. |
 | `zl_cam_style` | 1 | 1 = mouse camera: only the mouse turns it, so W always runs away from the camera (best on keyboard). 0 = OoT's camera, which Link drags around and which swings behind him by itself (best on a stick). Z-targeting works the same in both. |
 | `zl_cam_follow` | 1 | OoT camera only: swing behind Link while he runs (Camera_Normal1). |
 | `zl_autobind` | 1 | The first time you play as Link the client runs `zl_binds.cfg` and sets this to 0. A mod without its own `config.cfg` inherits Half-Life's, where MOUSE2 isn't Z. |

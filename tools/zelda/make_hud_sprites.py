@@ -240,6 +240,17 @@ def make_hud_icons(out):
         d.rectangle((18 * k, 27 * k, 22 * k, 30 * k), fill=255)
     frames.append(alpha_frame(render_l((s, s), key)))
 
+    # Frames 2-11: counter digits 0-9 (gCounterDigit0Tex .. 9, 8x16 in OoT, here 16x32)
+    path = find_font(None)
+    font = ImageFont.truetype(path, 30 * SS) if path else ImageFont.load_default(size=30 * SS)
+    for digit in "0123456789":
+        def draw_digit(d, k, digit=digit):
+            box = d.textbbox((0, 0), digit, font=font)
+            x = (16 * k - (box[2] - box[0])) / 2 - box[0]
+            y = (32 * k - (box[3] - box[1])) / 2 - box[1]
+            d.text((x, y), digit, font=font, fill=255)
+        frames.append(alpha_frame(render_l((16, 32), draw_digit)))
+
     write_spr(os.path.join(out, "zl_hudicons.spr"), frames, SPR_INDEXALPHA, indexalpha_palette())
 
 

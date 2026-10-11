@@ -1712,6 +1712,19 @@ int CStudioModelRenderer::StudioDrawPlayer( int flags, entity_state_t *pplayer )
 	IEngineStudio.StudioSetHeader( m_pStudioHeader );
 	IEngineStudio.SetRenderModel( m_pRenderModel );
 
+	// Zelda: Link's body points where he faces (pm_zelda's shape yaw), not along the view like a
+	// Half-Life player: the view is the camera behind him, so otherwise he'd always look away
+	// from it and seem to strafe
+	extern int ZL_LocalLinkFacing( cl_entity_t *ent, float *yaw );
+	float zlFacing;
+	int zlBody = ZL_LocalLinkFacing( m_pCurrentEntity, &zlFacing );
+	if ( zlBody )
+	{
+		m_pCurrentEntity->angles[PITCH] = m_pCurrentEntity->curstate.angles[PITCH] = 0;
+		m_pCurrentEntity->angles[YAW] = m_pCurrentEntity->curstate.angles[YAW] = zlFacing;
+		m_pCurrentEntity->angles[ROLL] = m_pCurrentEntity->curstate.angles[ROLL] = 0;
+	}
+
 	if (pplayer->gaitsequence)
 	{
 		vec3_t orig_angles;
@@ -1720,6 +1733,16 @@ int CStudioModelRenderer::StudioDrawPlayer( int flags, entity_state_t *pplayer )
 		VectorCopy( m_pCurrentEntity->angles, orig_angles );
 	
 		StudioProcessGait( pplayer );
+
+		if ( zlBody )
+		{
+			// Legs and torso together, no twist toward the view (player.mdl stand-ins)
+			m_pPlayerInfo->gaityaw = zlFacing;
+			m_pCurrentEntity->angles[YAW] = m_pCurrentEntity->curstate.angles[YAW] = zlFacing;
+			m_pCurrentEntity->angles[PITCH] = m_pCurrentEntity->curstate.angles[PITCH] = 0;
+			for ( int c = 0; c < 4; c++ )
+				m_pCurrentEntity->curstate.controller[c] = m_pCurrentEntity->latched.prevcontroller[c] = 127;
+		}
 
 		m_pPlayerInfo->gaitsequence = pplayer->gaitsequence;
 		m_pPlayerInfo = NULL;

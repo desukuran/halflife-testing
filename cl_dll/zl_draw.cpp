@@ -133,6 +133,14 @@ float ZDraw_X( float x, int anchor )
 {
 	float s = ZDraw_Scale();
 
+	// zl_hud_wide 0 (default): the N64's 4:3 picture, centred, so the buttons sit as close to
+	// the hearts as they do on a TV. 1: hearts on the left edge, buttons on the right edge.
+	static cvar_t *zl_hud_wide;
+	if ( !zl_hud_wide )
+		zl_hud_wide = gEngfuncs.pfnGetCvarPointer( "zl_hud_wide" );
+	if ( ( !zl_hud_wide || !zl_hud_wide->value ) && ScreenWidth > 320.0f * s )
+		return ( ScreenWidth - 320.0f * s ) * 0.5f + x * s;
+
 	switch ( anchor )
 	{
 	case ZA_RIGHT:	return ScreenWidth - ( 320.0f - x ) * s;

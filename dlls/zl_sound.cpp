@@ -90,24 +90,33 @@ void CLinkPlayer::ZSound( int channel, int sound, float volume, float attn, int 
 
 // Precaching a model that isn't there is fatal, and link.mdl only exists once you have built it
 // from your own ROM (tools/zelda/make_link_model.py)
+// zl_model: "auto" (link.mdl if you've built it, else player.mdl), "hl" (player.mdl) or a path.
+// Older builds saved "models/player.mdl" as the default into config.cfg; that counts as auto.
 const char *ZL_PlayerModel( void )
 {
 	static char checked[128];
-	static BOOL exists;
-	const char *want = ( zl_model.string && zl_model.string[0] ) ? zl_model.string : "models/player.mdl";
+	static const char *result = "models/player.mdl";
+	const char *want = zl_model.string ? zl_model.string : "";
 
 	if ( strcmp( checked, want ) )
 	{
-		int len = 0;
-		byte *data = LOAD_FILE_FOR_ME( (char *)want, &len );
-		exists = data != NULL;
-		if ( data )
-			FREE_FILE( data );
 		strncpy( checked, want, sizeof( checked ) - 1 );
-		if ( !exists )
-			ALERT( at_console, "Zelda: %s not found, using models/player.mdl\n", want );
+		const char *path = want;
+		if ( !want[0] || !stricmp( want, "auto" ) || !stricmp( want, "models/player.mdl" ) )
+			path = "models/player/link/link.mdl";
+		else if ( !stricmp( want, "hl" ) )
+			path = "models/player.mdl";
+
+		if ( ZL_FileExists( path ) )
+			result = STRING( ALLOC_STRING( path ) );
+		else
+		{
+			result = "models/player.mdl";
+			ALERT( at_console, "Zelda: %s not found, using models/player.mdl\n", path );
+		}
+		ALERT( at_console, "Zelda: player model %s\n", result );
 	}
-	return exists ? want : "models/player.mdl";
+	return result;
 }
 
 // Called from ClientPrecache (world spawn), the only time precaching is allowed

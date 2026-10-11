@@ -19,11 +19,13 @@ extern BOOL g_fGameOver;
 
 LINK_ENTITY_TO_CLASS( player, CLinkPlayer );
 
+extern DLL_GLOBAL ULONG g_ulModelIndexPlayer;
+
 cvar_t zl_enable		= { "zl_enable", "1", FCVAR_SERVER };
 cvar_t zl_dmg_in_scale	= { "zl_dmg_in_scale", "0.8", FCVAR_SERVER };	// HL damage -> OoT health units
 cvar_t zl_dmg_out_scale	= { "zl_dmg_out_scale", "10", FCVAR_SERVER };	// OoT damage -> HL damage
 cvar_t zl_ztoggle		= { "zl_ztoggle", "0", FCVAR_ARCHIVE };		// OoT options menu: Z Target "Switch" instead of "Hold"
-cvar_t zl_model			= { "zl_model", "models/player/link/link.mdl", FCVAR_ARCHIVE };	// tools/zelda/make_link_model.py builds it
+cvar_t zl_model			= { "zl_model", "auto", FCVAR_ARCHIVE };	// auto: models/player/link/link.mdl (make_link_model.py) when it exists; hl: player.mdl
 cvar_t zl_oot_sounds	= { "zl_oot_sounds", "1", FCVAR_ARCHIVE };	// 1: OoT sounds from sound/zelda/oot/ where they exist, 0: Half-Life only
 cvar_t zl_hl_suit		= { "zl_hl_suit", "0", FCVAR_SERVER };		// also give the HEV suit (HL HUD + voice)
 cvar_t zl_drops			= { "zl_drops", "1", FCVAR_SERVER };		// monsters drop rupees / hearts
@@ -293,6 +295,8 @@ void CLinkPlayer::Spawn( void )
 	{
 		SET_MODEL( ENT( pev ), ZL_PlayerModel() );
 		UTIL_SetSize( pev, VEC_HULL_MIN, VEC_HULL_MAX );
+		// CheckPowerups() puts g_ulModelIndexPlayer back on every frame ("don't use eyes")
+		g_ulModelIndexPlayer = pev->modelindex;
 	}
 
 	if ( !m_fZInitialized )

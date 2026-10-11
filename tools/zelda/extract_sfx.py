@@ -18,7 +18,7 @@ interpreter of the commands seq 0 uses) over the samples `make setup` extracted,
     not baked in
 
 What's approximated: envelopes (attack/decay are flat, release is a short fade), vibrato,
-filters, reverb and panning are ignored; pitch slides (portamento) are linear. Sounds that
+filters, reverb and panning are ignored. Sounds that
 loop until the game stops them (charging, hookshot chain) are cut at --max-seconds.
 
 Nothing this writes may be redistributed: it comes from your ROM. The output folder is git
@@ -43,6 +43,29 @@ TICKS_PER_SEC = 120 * 48 / 60.0    # seq 0: tempo 120, 48 tatums a beat
 NOTE_NAMES = ["A", "BF", "B", "C", "DF", "D", "EF", "E", "F", "GF", "G", "AF"]
 INSTR_SFX = 0x7E                   # FONTANY_INSTR_SFX: the note picks an Effect
 INSTR_DRUM = 0x7F                  # FONTANY_INSTR_DRUM: the note picks a Drum
+# FONTANY_INSTR_SAWTOOTH .. ASM_NOISE (128..136): the audio library's built-in waveforms
+FONTANY_WAVES = ["SAWTOOTH", "TRIANGLE", "SINE", "SQUARE", "NOISE", "BELL", "8PULSE", "4PULSE", "ASM_NOISE"]
+WAVE_TABLES = []                   # 64 sample cycles from src/audio/internal/data.c (gWaveSamples)
+
+
+class WaveSample:
+    """One cycle of a built-in waveform, looped. Audio_BuildSyntheticWave plays a wave note at
+    1.0465 x 32 kHz / 64 samples a cycle at C4, i.e. the waves sound an octave above the note
+    (C4 -> 523 Hz)."""
+    def __init__(self, cycle):
+        self.data = [v / 32768.0 for v in cycle] + [cycle[0] / 32768.0]
+        self.loop = (0, len(cycle))
+        self.rate = 523.25 * len(cycle)
+        self.base = 60
+
+
+def load_wave_tables(oot):
+    src = open(os.path.join(oot, "src", "audio", "internal", "data.c")).read()
+    order = re.search(r"gWaveSamples\[\]\s*=\s*\{([^}]*)\}", src).group(1)
+    for name in [t.strip() for t in order.split(",") if t.strip()]:
+        body = re.search(r"\b%s\[\]\s*=\s*\{([^}]*)\}" % re.escape(name), src).group(1)
+        vals = [int(v) for v in re.findall(r"-?\d+", re.sub(r"/\*.*?\*/|//[^\n]*", "", body, flags=re.S))]
+        WAVE_TABLES.append(WaveSample(vals[:64]))
 
 
 def pitch_index(tok):
@@ -142,6 +165,9 @@ class Font:
 
     def voice(self, instr, midi):
         """(Sample, rate, base midi, release) for a note on an instrument."""
+        if instr is not None and 128 <= instr < 128 + len(WAVE_TABLES):
+            w = WAVE_TABLES[instr - 128]
+            return w, w.rate, w.base, 0
         if instr == INSTR_SFX:
             idx = midi - 21
             if 0 <= idx < len(self.effects) and self.effects[idx]:
@@ -269,6 +295,9 @@ def sym_value(tok, consts):
         return INSTR_SFX
     if tok == "FONTANY_INSTR_DRUM":
         return INSTR_DRUM
+    m = re.match(r"FONTANY_INSTR_(\w+)$", tok)
+    if m and m.group(1) in FONTANY_WAVES:
+        return 128 + FONTANY_WAVES.index(m.group(1))
     m = re.match(r"IO_PORT_(\d+)$", tok)
     if m:
         return int(m.group(1))
@@ -284,7 +313,7 @@ def sym_value(tok, consts):
 # Interpreter
 # ---------------------------------------------------------------------------------------------
 class Note:
-    __slots__ = ("start", "dur", "instr", "font", "midi", "vel", "porta_from", "legato_with")
+    __slots__ = ("start", "dur", "instr", "font", "midi", "vel", "porta_from", "porta_to", "porta_frac", "legato_with")
 
 
 class Interpreter:
@@ -435,10 +464,19 @@ class Interpreter:
                 offset = transpose + st["transpose"]   # for SFX / drum instruments it moves the index
                 n.midi = pitch + 21 + offset
                 n.vel = vel
-                n.porta_from = None
+                # Portamento (AudioSeq_SeqLayerProcessScriptStep4): modes 1, 3, 5 slide from the
+                # given pitch to the note, 2 and 4 from the note to it. 0x80 ("special") means the
+                # time is in 256ths of the note; modes 1 and 2 only last one note.
+                n.porta_from = n.porta_to = None
+                n.porta_frac = 1.0
                 if porta:
-                    n.porta_from = porta[1] + 21 + offset
-                    if not (porta[0] & 0x80):
+                    mode, target = porta[0] & 0x7F, porta[1] + 21 + offset
+                    if mode in (2, 4):
+                        n.porta_from, n.porta_to = n.midi, target
+                    else:
+                        n.porta_from, n.porta_to = target, n.midi
+                    n.porta_frac = min(1.0, porta[2] / 256.0) if porta[0] & 0x80 else min(1.0, porta[2] / 64.0)
+                    if mode in (1, 2):
                         porta = None
                 n.legato_with = prev if legato else None
                 self.notes.append(n)
@@ -473,8 +511,12 @@ def render(notes, fonts, max_seconds):
         fade = int(OUT_RATE * min(0.4, max(0.012, (256 - (release or 240)) * 0.004)))
         amp = (n.vel / 127.0) ** 2
         pos = positions.get(id(n.legato_with), 0.0) if n.legato_with else 0.0
-        step_end = 2 ** ((n.midi - base) / 12.0) * rate / OUT_RATE
-        step_start = 2 ** (((n.porta_from if n.porta_from is not None else n.midi) - base) / 12.0) * rate / OUT_RATE
+        if n.porta_from is not None:
+            step_start = 2 ** ((n.porta_from - base) / 12.0) * rate / OUT_RATE
+            step_end = 2 ** ((n.porta_to - base) / 12.0) * rate / OUT_RATE
+        else:
+            step_start = step_end = 2 ** ((n.midi - base) / 12.0) * rate / OUT_RATE
+        slide = max(1, int((dur_samples or OUT_RATE) * n.porta_frac))
         data = sample.data
         nd = len(data)
         total = (dur_samples if dur_samples is not None else 10 ** 9) + fade
@@ -503,10 +545,8 @@ def render(notes, fonts, max_seconds):
             if o >= length:
                 break
             out[o] += s * g
-            if dur_samples:
-                k = min(1.0, i / max(1, dur_samples))
-            else:
-                k = 1.0
+            # Audio_GetPortamentoFreqScale eases along gBendPitchOneOctaveFrequencies (2^x - 1)
+            k = 2.0 ** min(1.0, i / slide) - 1.0
             pos += step_start + (step_end - step_start) * k
             i += 1
         positions[id(n)] = pos
@@ -611,6 +651,7 @@ def main():
 
     random.seed(64)
     fonts = load_fonts(audio)
+    load_wave_tables(args.oot)
     prog = Program(seq)
     chans = sfx_channels(args.oot)
     names = args.only or (sorted(chans) if args.all else wanted_sounds())
@@ -628,7 +669,8 @@ def main():
             for i, (font, eff, vel) in enumerate(takes):
                 n = Note()
                 n.start, n.dur, n.instr, n.font, n.midi, n.vel = 0, None, INSTR_SFX, font, eff + 21, vel
-                n.porta_from = n.legato_with = None
+                n.porta_from = n.porta_to = n.legato_with = None
+                n.porta_frac = 1.0
                 data = render([n], fonts, args.max_seconds)
                 fname = name + (f"_{i + 1}" if i else "") + ".wav"
                 write_wav(os.path.join(args.out, fname), data)

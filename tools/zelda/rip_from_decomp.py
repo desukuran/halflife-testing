@@ -17,7 +17,7 @@ keeps it out of the repository.
 
 It writes, under zelda/ (all of it git ignored):
     sprites/oot/zl_heart.spr     gHeart*Tex (parameter_static)
-    sprites/oot/zl_hudicons.spr  gRupeeCounterIconTex, gSmallKeyCounterIconTex
+    sprites/oot/zl_hudicons.spr  gRupeeCounterIconTex, gSmallKeyCounterIconTex, gCounterDigit0-9Tex
     sprites/oot/zl_button.spr    gButtonBackgroundTex, gEquippedItemOutlineTex, gEmptyCLeftArrowTex
     sprites/oot/zl_icons.spr     gItemIcon*Tex (icon_item_static), gQuestIcon*Tex
     sprites/oot/zl_font.spr      gMsgChar*Tex (nes_font_static) + zl_font.txt widths
@@ -118,6 +118,14 @@ def rip_hud_icons(assets, out):
         # Single tint: keep some of the shading in the alpha
         shaded = mul(i, a, lambda x, y: y * (90 + x * 165 // 255) // 255)
         frames.append(mk.alpha_frame(scale_nearest(shaded, (32, 32))))
+    # Frames 2-11: the rupee / key counter digits (i8, the intensity is the coverage)
+    for d in range(10):
+        p = find_png(assets, "parameter_static", f"gCounterDigit{d}Tex")
+        if not p:
+            print(f"  missing gCounterDigit{d}Tex, keeping generated hud icons")
+            return
+        i, a = load_la(p)
+        frames.append(mk.alpha_frame(scale_nearest(i, (16, 32))))
     mk.write_spr(os.path.join(out, "zl_hudicons.spr"), frames, mk.SPR_INDEXALPHA, mk.indexalpha_palette())
 
 

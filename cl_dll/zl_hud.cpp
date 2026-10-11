@@ -62,6 +62,16 @@ struct model_s *ZL_PlayerModelOverride( cl_entity_t *ent )
 	return ent->model;
 }
 
+// The local player while he's Link: his predicted shape yaw, for StudioDrawPlayer
+int ZL_LocalLinkFacing( cl_entity_t *ent, float *yaw )
+{
+	cl_entity_t *local = gEngfuncs.GetLocalPlayer();
+	if ( !ent || !local || ent->index != local->index || !ZL_IsLink() )
+		return 0;
+	*yaw = ZL_PredictedFacing();
+	return 1;
+}
+
 int ZL_PredictedState( void )
 {
 	return g_pmzPredicted.valid ? g_pmzPredicted.state : 0;
@@ -115,6 +125,7 @@ public:
 	void DrawHearts( float time );
 	void DrawMagic( void );
 	void DrawCounters( void );
+	void DrawCounterDigits( const char *text, float x, float y, int r, int g, int b );
 	void DrawButtons( float time );
 	void DrawItemIcon( int item, int weapon, float cx, float cy, float size, int alpha );
 	void DrawCount( int value, float right, float bottom, float h, int r, int g, int b );
@@ -162,6 +173,7 @@ int CHudZelda::Init( void )
 	zl_hud_gc = CVAR_CREATE( "zl_hud_gc", "0", FCVAR_ARCHIVE );		// GameCube button colours
 	zl_hud = CVAR_CREATE( "zl_hud", "1", FCVAR_ARCHIVE );
 	zl_hud_scale = CVAR_CREATE( "zl_hud_scale", "1", FCVAR_ARCHIVE );
+	CVAR_CREATE( "zl_hud_wide", "0", FCVAR_ARCHIVE );	// 0: N64 4:3 layout, 1: stretch to the screen edges
 
 	ZDraw_Init();
 	ZText_Init();
@@ -398,6 +410,29 @@ void CHudZelda::DrawCount( int value, float right, float bottom, float h, int r,
 	ZDraw_TextShadow( buf, right - w, bottom - h * 0.8f, h, r, g, b, 255 );
 }
 
+// gCounterDigit0Tex .. 9: 8x16, 8 apart (Interface_DrawCounters). Frames 2-11 of zl_hudicons;
+// sprites from older tool versions don't have them, then the message font stands in.
+void CHudZelda::DrawCounterDigits( const char *text, float x, float y, int r, int g, int b )
+{
+	float s = ZDraw_Scale();
+	int hasDigits = g_zlSprHudIcons && gEngfuncs.pfnSPR_Frames( g_zlSprHudIcons ) >= 12;
+
+	for ( int i = 0; text[i]; i++, x += 8 )
+	{
+		if ( hasDigits && text[i] >= '0' && text[i] <= '9' )
+		{
+			// Dark drop shadow one pixel down-right, like the N64's
+			ZDraw_Sprite( g_zlSprHudIcons, 2 + text[i] - '0', ZDraw_X( x + 1, ZA_LEFT ), ZDraw_Y( y + 1 ), 8 * s, 16 * s, 0, 0, 0, 160 );
+			ZDraw_Sprite( g_zlSprHudIcons, 2 + text[i] - '0', ZDraw_X( x, ZA_LEFT ), ZDraw_Y( y ), 8 * s, 16 * s, r, g, b, 255 );
+		}
+		else
+		{
+			char c[2] = { text[i], 0 };
+			ZDraw_TextShadow( c, ZDraw_X( x, ZA_LEFT ), ZDraw_Y( y - 2 ), 18 * s, r, g, b, 255 );
+		}
+	}
+}
+
 // Rupee icon at (26, 206), digits from x = 42; small keys one row up at y = 190
 void CHudZelda::DrawCounters( void )
 {
@@ -416,19 +451,13 @@ void CHudZelda::DrawCounters( void )
 	else if ( g_zl.rupees == 0 )
 		r = g = b = 100;
 
-	float x = ZDraw_X( 42, ZA_LEFT );
-	for ( int i = 0; buf[i]; i++ )
-	{
-		char c[2] = { buf[i], 0 };
-		ZDraw_TextShadow( c, x, ZDraw_Y( 204 ), 18 * s, r, g, b, 255 );
-		x += 9 * s;	// gCounterDigit textures are 8 px apart
-	}
+	DrawCounterDigits( buf, 42, 206, r, g, b );
 
 	if ( g_zl.keys > 0 )
 	{
 		ZDraw_Sprite( g_zlSprHudIcons, 1, ZDraw_X( 26, ZA_LEFT ), ZDraw_Y( 190 ), 16 * s, 16 * s, 200, 230, 255, 255 );
 		snprintf( buf, sizeof( buf ), "%d", g_zl.keys );
-		ZDraw_TextShadow( buf, ZDraw_X( 42, ZA_LEFT ), ZDraw_Y( 188 ), 18 * s, 255, 255, 255, 255 );
+		DrawCounterDigits( buf, 42, 190, 255, 255, 255 );
 	}
 }
 
