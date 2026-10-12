@@ -759,19 +759,31 @@ def read_anim(assets, name):
     return frames
 
 
-def write_anim_smd(path, limbs, frames, keep_root_xz, origin_fn=None):
-    """origin_fn(root_pos, rots): per frame origin (see to_hl), for the first person model"""
+def write_anim_smd(path, limbs, frames, keep_root_xz, origin_fn=None, keep_side=False):
+    """origin_fn(root_pos, rots): per frame origin (see to_hl), for the first person model.
+    keep_side: keep the root's sideways movement (OoT X) from where it starts, the game moving
+    him forward itself (ROOT_SIDE_ANIMS)"""
     out = smd_header(limbs) + ["skeleton"]
     rest_xz = limbs[0]["joint"]
     for t, (root, rots, face) in enumerate(frames):
         rp = list(root)
-        if not keep_root_xz:
+        if keep_side and not keep_root_xz:
+            rp[0], rp[2] = rest_xz[0] + root[0] - frames[0][0][0], rest_xz[2]
+        elif not keep_root_xz:
             rp[0], rp[2] = rest_xz[0], rest_xz[2]
         out.append(f"time {t}")
         out += bone_frame(limbs, rots, rp, origin_fn(rp, rots) if origin_fn else None)
     out.append("end")
     with open(path, "w", newline="\n") as f:
         f.write("\n".join(out) + "\n")
+
+
+# Animations that walk Link through a doorway (ANIM_FLAG_UPDATE_XZ): pm_zelda moves the player
+# forward along the root's path, the sideways part stays in the animation so the hull goes straight
+# through the middle of the doorway
+ROOT_SIDE_ANIMS = {
+    "link_demo_doorA_link", "link_demo_doorA_link_free", "link_demo_doorB_link", "link_demo_doorB_link_free",
+}
 
 
 # Whole body sequences made of two OoT animations, the way Player_UpdateUpperBody lays an upper
@@ -787,6 +799,15 @@ COMBINED = [
     ("zl_carry_run", "link_normal_run_free", "link_normal_carryB_wait", True),
     ("zl_putaway", "link_normal_wait_free", "link_normal_fighter2free", False),
     ("zl_putaway_noshield", "link_normal_wait_free", "link_normal_free2fighter_free", False),
+]
+
+# Sequences that are the start of an OoT animation, held on their last frame: the landing from a
+# fall that hurt (func_80843E64 sets skelAnime.endFrame = 8, then fallDamageStunTimer)
+TRIMMED = [
+    ("zl_landing_stun", "link_normal_landing", 9),
+    ("zl_landing_stun_free", "link_normal_landing_free", 9),
+    # Dying: func_80836448 sets endFrame = 84 on link_derth_rebirth (the rest is the fairy revive)
+    ("zl_death", "link_derth_rebirth", 85),
 ]
 
 
@@ -1170,7 +1191,8 @@ def main():
         if not frames:
             print(f"  animation {name} not found")
             continue
-        write_anim_smd(os.path.join(args.src, "anims", name + ".smd"), limbs, frames, args.keep_root_motion)
+        write_anim_smd(os.path.join(args.src, "anims", name + ".smd"), limbs, frames, args.keep_root_motion,
+                       keep_side=name in ROOT_SIDE_ANIMS)
         seqs.append((name, loop, len(frames)))
     for name, legs_name, upper_name, loop in COMBINED:
         legs, upper = read_anim(assets, legs_name), read_anim(assets, upper_name)
@@ -1180,6 +1202,13 @@ def main():
         frames = combine_anims(legs, upper, loop)
         write_anim_smd(os.path.join(args.src, "anims", name + ".smd"), limbs, frames, args.keep_root_motion)
         seqs.append((name, loop, len(frames)))
+    for name, src_name, count in TRIMMED:
+        frames = read_anim(assets, src_name)
+        if not frames:
+            print(f"  animation {name}: {src_name} not found")
+            continue
+        write_anim_smd(os.path.join(args.src, "anims", name + ".smd"), limbs, frames[:count], args.keep_root_motion)
+        seqs.append((name, False, count))
     print(f"{len(seqs)} animations")
 
     # QC

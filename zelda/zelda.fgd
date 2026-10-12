@@ -78,6 +78,47 @@
 	message(string) : "Message name (zl_messages.txt)" : "SIGN_ZL_TEST"
 ]
 
+@PointClass base(ZTargetname, ZTarget) size(-32 -32 0, 32 32 106) studio("models/zelda/door.mdl") = zl_door : "Door with a handle (En_Door). Face it and press A: Link opens it and walks through, the camera cuts to the other side. Angle = the way it faces (it opens from both sides). The doorway wants to be 64 wide, 106 high."
+[
+	angles(string) : "Pitch Yaw Roll (Y Z X)" : "0 0 0"
+	spawnflags(flags) =
+	[
+		1 : "Locked (takes a small key)" : 0
+	]
+]
+
+@PointClass base(ZTargetname, ZTarget) size(-42 -42 0, 42 42 117) studio("models/zelda/door_shutter.mdl") = zl_door_shutter : "Dungeon door that slides up (Door_Shutter). Face it and press A: it rises 212 units, Link walks on under it and it slams shut behind him. Angle = the way it faces. The doorway wants to be 88 wide, 120 high, with wall above it to slide into."
+[
+	angles(string) : "Pitch Yaw Roll (Y Z X)" : "0 0 0"
+	spawnflags(flags) =
+	[
+		1 : "Locked (takes a small key)" : 0
+	]
+]
+
+@PointClass base(ZTargetname) size(-10 -10 0, 10 10 60) studio("models/zelda/torch_golden.mdl") = zl_torch : "Standing torch (Obj_Syokudai). Triggering it lights it or puts it out."
+[
+	type(choices) : "Stand" : 0 =
+	[
+		0 : "Golden"
+		1 : "Timed"
+		2 : "Wooden"
+	]
+	spawnflags(flags) =
+	[
+		1 : "Starts out" : 0
+	]
+]
+
+@PointClass size(-12 -12 0, 12 12 44) studio("models/zelda/bush.mdl") = zl_grass : "Bush or grass to cut (En_Kusa). Drops OoT's random collectibles."
+[
+	type(choices) : "Kind" : 0 =
+	[
+		0 : "Bush (solid, leaves a stump)"
+		1 : "Tuft of grass"
+	]
+]
+
 @PointClass base(ZTargetname, ZTarget) size(-8 -8 -8, 8 8 8) color(80 80 255) = trigger_zmessage : "Show an OoT text box when triggered. Target fires when it closes (USE_ON for the first choice, USE_OFF otherwise)."
 [
 	message(string) : "Message name (zl_messages.txt)" : "NAVI_HEY"

@@ -189,7 +189,7 @@ void CLinkPlayer::ZUpdateTargeting( void )
 		}
 	}
 
-	if ( act == ZACT_TALK || act == ZACT_GETITEM || act == ZACT_CHEST || act == ZACT_DEAD || act == ZACT_AIM || act == ZACT_CUP )
+	if ( act == ZACT_TALK || act == ZACT_GETITEM || act == ZACT_CHEST || act == ZACT_DOOR || act == ZACT_DEAD || act == ZACT_AIM || act == ZACT_CUP )
 	{
 		m_hZHover = NULL;
 	}

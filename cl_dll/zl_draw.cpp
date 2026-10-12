@@ -32,6 +32,20 @@ struct model_s *g_zlSprTextbox;
 struct model_s *g_zlSprHudIcons;
 struct model_s *g_zlSprIcons;
 struct model_s *g_zlSprMagic;
+struct model_s *g_zlSprDoAction;
+struct model_s *g_zlSprNavi;
+struct model_s *g_zlSprGameOver;
+struct model_s *g_zlSprAmmo;
+
+static int ZDraw_FileExists( const char *name );
+
+// Only ripped from the ROM (no generated stand-in): NULL when it isn't there
+static struct model_s *ZDraw_LoadRippedSprite( const char *name )
+{
+	char oot[128];
+	snprintf( oot, sizeof( oot ), "sprites/oot/%s", name );
+	return ZDraw_FileExists( oot ) ? ZDraw_LoadSprite( oot ) : NULL;
+}
 
 static int s_drawing;
 static void ZDraw_LoadFontWidths( void );
@@ -119,6 +133,10 @@ void ZDraw_VidInit( void )
 	g_zlSprHudIcons	= ZDraw_LoadSprite( "sprites/zl_hudicons.spr" );
 	g_zlSprIcons	= ZDraw_LoadSprite( "sprites/zl_icons.spr" );
 	g_zlSprMagic	= ZDraw_LoadSprite( "sprites/zl_magic.spr" );
+	g_zlSprDoAction	= ZDraw_LoadRippedSprite( "zl_doaction.spr" );
+	g_zlSprAmmo		= ZDraw_LoadRippedSprite( "zl_ammo.spr" );
+	g_zlSprNavi		= ZDraw_LoadRippedSprite( "zl_navi.spr" );
+	g_zlSprGameOver	= ZDraw_LoadRippedSprite( "zl_gameover.spr" );
 
 	ZDraw_LoadFontWidths();
 }

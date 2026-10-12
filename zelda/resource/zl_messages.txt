@@ -261,6 +261,12 @@ Mind your step: you'll keep
 sliding when you let go,
 and turn wide while you run.
 
+// Navi on C-up at a locked door without a key (naviTextId -0x203). A stand-in: rip_from_decomp.py's
+// zl_oot_messages.txt has OoT's own 0x0203, which replaces it.
+@0x0203 BLUE TOP
+{SFX:NA_SE_VO_NA_HELLO_3}This door is locked!
+You need a {RED}Small Key{WHITE} to open it.
+
 @NAVI_HEY BLUE TOP
 {SFX:NA_SE_VO_NA_HELLO_3}Hey! Listen!
 Press {YELLOW}Z{WHITE} to target things,

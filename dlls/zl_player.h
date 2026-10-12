@@ -48,6 +48,7 @@ public:
 	int		TakeDamage( entvars_t *pevInflictor, entvars_t *pevAttacker, float flDamage, int bitsDamageType ) override;
 	int		TakeHealth( float flHealth, int bitsDamageType ) override;
 	void	Killed( entvars_t *pevAttacker, int iGib ) override;
+	void	ZContinue( BOOL yes );
 	void	UpdateClientData( void ) override;
 	void	SetAnimation( PLAYER_ANIM playerAnim ) override;
 	void	ImpulseCommands( void ) override;
@@ -128,6 +129,10 @@ public:
 	BOOL	m_fZSwingHitWorld;
 	float	m_flZFallStartZ;
 	BOOL	m_fZWasOnGround;
+	int		m_iZFallVoice;			// 1: NA_SE_VO_LI_FALL_S's moment is past, 2: FALL_L too
+	float	m_flZShockUntil;		// bodyShockTimer: electric_shock_end as he stands up
+	float	m_flZDeathTime;			// when he died (func_80836448)
+	BOOL	m_fZDeathBound;			// link_derth_rebirth's NA_SE_PL_BOUND has played
 	float	m_flZLowHealthBeep;
 	void	ZSwordThink( void );
 	void	ZSwordSweep( float minDeg, float maxDeg, float reach, float height, int ootDamage, int dmgBits );
@@ -141,6 +146,8 @@ public:
 	float	m_flZPutAwayStart;		// A "Put Away" started (fighter2free plays), 0 = not putting away
 	float	m_flZPutAwayReady;		// when "Put Away" came on offer (putAwayCooldownTimer), 0 = it isn't
 	float	m_flZTalkEndTime;		// when the last text box closed (its A press mustn't start another)
+	const char *m_pszZNavi;			// player->naviTextId: what Navi has to say on C-up, or NULL
+	BOOL	m_fZNaviCalling;		// interfaceCtx->naviCalling (her "Hey!" once when it starts)
 	BOOL	m_fZWorldFrozen;
 	float	m_flZBlinkNext;			// next blink (link.mdl eye skins)
 	int		m_iZBlinkStep;
@@ -207,6 +214,9 @@ const char *ZL_SoundPath( int sound );
 void ZL_SendFx( int type, const Vector &pos );
 const char *ZL_SoundTakesKey( void );
 BOOL ZL_FileExists( const char *path );	// relative to the mod folder
+BOOL ZL_IsDoor( CBaseEntity *pEnt );		// zl_door.cpp
+BOOL ZL_DoorCanOpen( CBaseEntity *pEnt, CLinkPlayer *pLink );
+const char *ZL_DoorNaviText( CBaseEntity *pEnt, CLinkPlayer *pLink );
 	// "zv" physinfo: takes per sound id
 
 // Damage translation (zl_combat.cpp)

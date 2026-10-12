@@ -19,11 +19,13 @@ It writes, under zelda/ (all of it git ignored):
     sprites/oot/zl_heart.spr     gHeart*Tex (parameter_static)
     sprites/oot/zl_hudicons.spr  gRupeeCounterIconTex, gSmallKeyCounterIconTex, gCounterDigit0-9Tex
     sprites/oot/zl_magic.spr     gMagicMeterEndTex, gMagicMeterMidTex, gMagicMeterFillTex
+    sprites/oot/zl_doaction.spr  the A button's labels (do_action_static)
+    sprites/oot/zl_ammo.spr      gAmmoDigit0-9Tex
     sprites/oot/zl_drops.spr     gDrop*Tex: the bombs, arrows, nuts and magic jars lying around
     sprites/oot/zl_button.spr    gButtonBackgroundTex, gEquippedItemOutlineTex, gEmptyCLeftArrowTex
     sprites/oot/zl_icons.spr     gItemIcon*Tex (icon_item_static), gQuestIcon*Tex
     sprites/oot/zl_font.spr      gMsgChar*Tex (nes_font_static) + zl_font.txt widths
-    sprites/oot/zl_spinring_*.spr, zl_spincharge_*.spr, zl_hitmark.spr
+    sprites/oot/zl_spinring_*.spr, zl_spincharge_*.spr, zl_hitmark.spr, zl_flame.spr
                                  gSpinAttack*Tex, gEffHitMark*Tex (gameplay_keep), baked
                                  frame by frame with the colours OoT draws them in
     resource/zl_oot_messages.txt   every English message, in the zl_messages.txt format,
@@ -134,6 +136,94 @@ def rip_hud_icons(assets, out):
     mk.write_spr(os.path.join(out, "zl_hudicons.spr"), frames, mk.SPR_INDEXALPHA, mk.indexalpha_palette())
 
 
+def rip_two_layer(assets, folder, names, out, sprite, size=None):
+    """IA textures drawn with the colour as PRIMITIVE over a dark ENVIRONMENT: frame 2n is the
+    alpha (drawn dark), 2n + 1 alpha x intensity (drawn in the colour). A missing name gets an
+    empty frame."""
+    frames = []
+    w = h = None
+    for n in names:
+        p = find_png(assets, folder, n) if n else None
+        if p:
+            i, a = load_la(p)
+            if size:
+                i, a = i.resize(size, Image.NEAREST), a.resize(size, Image.NEAREST)
+            w, h = i.size
+            frames += [mk.alpha_frame(a), mk.alpha_frame(mul(a, i))]
+        else:
+            frames += [None, None]
+    if w is None:
+        print(f"  none of {sprite}'s textures found")
+        return
+    blank = (w, h, bytes(w * h))
+    frames = [f if f else blank for f in frames]
+    mk.write_spr(os.path.join(out, sprite), frames, mk.SPR_INDEXALPHA, mk.indexalpha_palette())
+
+
+def rip_hud_labels(assets, out):
+    # The A button's labels (do_action_static), in ZDO_* order (zl_shared.h); frames 2n, 2n + 1
+    names = ["", "Attack", "Check", "Enter", "Return", "Open", "Jump", "Decide", "Dive", "Faster",
+             "Throw", "Climb", "Drop", "Down", "Save", "Speak", "Next", "Grab", "Stop", "PutAway", "Reel"]
+    rip_two_layer(assets, "do_action_static", [f"g{n}DoActionENGTex" if n else None for n in names],
+                  out, "zl_doaction.spr")
+    # Interface_DrawAmmoCount: gAmmoDigit0..9Tex, 8x8
+    rip_two_layer(assets, "parameter_static", [f"gAmmoDigit{d}Tex" for d in range(10)], out, "zl_ammo.spr")
+    # C-up's "Navi" when she calls (cUpLabelTextures), 32x8
+    rip_two_layer(assets, "parameter_static", ["gNaviCUpENGTex"], out, "zl_navi.spr")
+
+
+def rip_game_over(assets, out):
+    """zl_gameover.spr: KaleidoScope_DrawGameOver's title and the continue prompt.
+    0, 1    "GAME OVER" (gGameOverP1..P3Tex side by side, 192 x 32): its alpha, drawn in
+            PRIMITIVE, and alpha x (1 - intensity), drawn over it in ENVIRONMENT: the combiner's
+            ENV + (PRIM - ENV) x I
+    2, 3    "Continue playing?" (gContinuePlayingENGTex), alpha and alpha x intensity
+    4, 5    "Yes" (gPauseYesENGTex)
+    6, 7    "No" (gPauseNoENGTex)
+    8..39   the title's shine (gGameOverMaskTex, 64 x 32, wrapping): ENV's share where the mask
+            is dark, one frame for each row it has scrolled"""
+    parts = [find_png(assets, "icon_item_gameover_static", f"gGameOverP{k}Tex") for k in (1, 2, 3)]
+    if not all(parts):
+        print("  gGameOverP*Tex not found")
+        return
+    loaded = [load_la(p) for p in parts]
+    w = sum(i.width for i, _ in loaded)
+    h = loaded[0][0].height
+    ti, ta = Image.new("L", (w, h)), Image.new("L", (w, h))
+    x = 0
+    for i, a in loaded:
+        ti.paste(i, (x, 0))
+        ta.paste(a, (x, 0))
+        x += i.width
+    # PRIM_LOD_FRAC 80: TEXEL0 + (TEXEL1 - TEXEL0) x k, TEXEL1 the scrolling mask
+    k = 80.0 / 255.0
+    frames = [mk.alpha_frame(ta), mk.alpha_frame(mul(ta, ti, lambda a, i: int(a * (255 - i) * (1.0 - k) / 255)))]
+    for folder, name in (("icon_item_gameover_static", "gContinuePlayingENGTex"),
+                         ("icon_item_nes_static", "gPauseYesENGTex"), ("icon_item_nes_static", "gPauseNoENGTex")):
+        p = find_png(assets, folder, name)
+        if not p:
+            print(f"  {name} not found")
+            return
+        i, a = load_la(p)
+        frames += [mk.alpha_frame(a), mk.alpha_frame(mul(a, i))]
+    # The shine: ENV's share k x (1 - mask) over the letters, the mask wrapping every 32 rows and
+    # scrolled half a row a frame (VREG(89) -= 2 in quarter texels), one frame a row
+    p = find_png(assets, "icon_item_gameover_static", "gGameOverMaskTex")
+    if p:
+        mi, _ = load_la(p)
+        mpx, apx = mi.load(), ta.load()
+        mw, mh = mi.size
+        for shift in range(mh):
+            f = Image.new("L", (w, h))
+            fpx = f.load()
+            for y in range(h):
+                for x in range(w):
+                    fpx[x, y] = int(apx[x, y] * k * (255 - mpx[x % mw, (y + shift) % mh]) / 255)
+            frames.append(mk.alpha_frame(f))
+    mk.write_spr(os.path.join(out, "zl_gameover.spr"), frames, mk.SPR_INDEXALPHA, mk.indexalpha_palette())
+    print(f"wrote {os.path.join(out, 'zl_gameover.spr')} ({len(frames)} frames)")
+
+
 def rip_magic(assets, out):
     imgs = []
     for n in ("gMagicMeterEndTex", "gMagicMeterMidTex", "gMagicMeterFillTex"):
@@ -159,7 +249,10 @@ def rip_magic(assets, out):
 
 def rip_buttons(assets, out):
     frames = []
-    for n, rot in (("gButtonBackgroundTex", 0), ("gEquippedItemOutlineTex", 0), ("gEmptyCLeftArrowTex", -90)):
+    # 0 button, 1 item outline, 2 the empty C-left arrow turned to point up (older HUD code),
+    # 3-5 the empty C-left / C-down / C-right arrows as they are
+    for n, rot in (("gButtonBackgroundTex", 0), ("gEquippedItemOutlineTex", 0), ("gEmptyCLeftArrowTex", -90),
+                   ("gEmptyCLeftArrowTex", 0), ("gEmptyCDownArrowTex", 0), ("gEmptyCRightArrowTex", 0)):
         p = find_png(assets, "parameter_static", n)
         if not p:
             print(f"  missing {n}, keeping generated buttons")
@@ -256,6 +349,22 @@ def rip_sword_effects(assets, out):
         mk.bake_spin_charge(out, "zl_spincharge_b.spr", c1, c2, "weak")
         mk.bake_spin_charge(out, "zl_spincharge_o.spr", c1, c2, "strong")
     # EffectSsHitMark: 32x24 textures of which the quad shows 24x24
+    fire1 = keep_png(assets, "gEffFire1Tex")
+    fire2 = keep_png(assets, "gEffFire2Tex")
+    if fire1 and fire2:
+        mk.bake_flame(out, fire1, fire2)
+    # Lights_DrawGlow's halo: gCircleGlowLTex is the left half, mirrored across (G_TX_MIRROR)
+    glow = keep_png(assets, "gCircleGlowLTex")
+    if glow:
+        h, w = len(glow), len(glow[0])
+        img = Image.new("L", (w * 2, h))
+        px = img.load()
+        for y in range(h):
+            for x in range(w):
+                v = int(round(glow[y][x] * 255))
+                px[x, y] = v
+                px[w * 2 - 1 - x, y] = v
+        mk.write_spr(os.path.join(out, "zl_glow.spr"), [mk.alpha_frame(img)], mk.SPR_INDEXALPHA, mk.indexalpha_palette())
     marks = [keep_png(assets, f"gEffHitMark{k}Tex") for k in range(1, 9)]
     if all(marks):
         mk.bake_hitmark(out, [[row[:24] for row in m[:24]] for m in marks])
@@ -520,6 +629,8 @@ def main():
     print("hearts");     rip_hearts(assets, sprites)
     print("hud icons");  rip_hud_icons(assets, sprites)
     print("magic meter"); rip_magic(assets, sprites)
+    print("hud labels"); rip_hud_labels(assets, sprites)
+    print("game over");  rip_game_over(assets, sprites)
     print("buttons");    rip_buttons(assets, sprites)
     print("item icons"); rip_item_icons(assets, sprites)
     print("hookshot dot"); rip_hookdot(assets, sprites)

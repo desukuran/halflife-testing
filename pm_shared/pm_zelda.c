@@ -743,6 +743,85 @@ static int PMZ_ClimbMove( void )
 
 /*
 =============================================================================
+ Through a door (Player_ActionHandler_1)
+=============================================================================
+*/
+
+// How far forward link_demo_doorA_link / doorB_link's root has gone (OoT units), every third
+// frame. The _free versions move the same. The sideways part of the root stays in the
+// animation (make_link_model.py), so the hull goes straight through the middle of the doorway.
+static const float s_doorRoot[2][34] =
+{
+	{ 0.0f, 0.2f, -0.7f, -1.9f, -3.2f, -4.4f, -5.2f, -5.2f, -1.6f, 6.0f, 15.2f, 21.0f, 27.4f, 33.5f, 36.2f, 42.2f, 52.3f,
+	  56.4f, 55.5f, 55.8f, 53.8f, 54.5f, 60.3f, 66.2f, 71.5f, 76.5f, 79.2f, 88.3f, 94.7f, 98.7f, 100.7f, 102.2f, 102.5f,
+	  102.4f },
+	{ 0.0f, 0.4f, 0.0f, -0.7f, -2.1f, -5.5f, -5.7f, -12.9f, -19.7f, -19.6f, -20.2f, -16.7f, -10.3f, -1.6f, 6.1f, 11.3f,
+	  19.5f, 28.9f, 36.0f, 41.7f, 47.8f, 52.0f, 58.7f, 65.9f, 73.5f, 82.7f, 91.8f, 95.0f, 100.1f, 103.7f, 103.7f, 103.3f,
+	  102.8f, 102.5f },
+};
+
+static float PMZ_DoorRoot( int sub, float frame )
+{
+	float f = frame / 3.0f;
+	int i = (int)f;
+
+	if ( frame <= 0 )
+		return 0;
+	if ( i >= 33 )
+		return s_doorRoot[sub][33];
+	return s_doorRoot[sub][i] + ( s_doorRoot[sub][i + 1] - s_doorRoot[sub][i] ) * ( f - i );
+}
+
+static void PMZ_Decelerate( float stepPerFrame );
+
+static void PMZ_DoorMove( void )
+{
+	int sub = ZL_GetSub( z.state );
+	float dt = pmove->cmd.msec * 0.001f;
+	float wait = ZL_DoorWait( z.state );
+	float t = z.time - wait;
+
+	// doorTimer: standing while the key turns
+	if ( t < 0 )
+	{
+		PMZ_Decelerate( 8.0f );
+		return;
+	}
+
+	if ( sub == ZDOOR_SLIDING )
+	{
+		// Player_Action_80845CA4: walk on at 5, Player_DecelerateToZero once there
+		float speed = PMZ_Speed2D();
+		float target = t < ZL_SHUTTER_WALK_TIME ? ZL_VEL( ZL_SHUTTER_WALK_SPEED ) : 0.0f;
+		speed = PMZ_AsymStep( speed, target, ZL_ACC( ZL_ACCEL_STEP ), ZL_ACC( 8.0f ) );
+		PMZ_SetVelocity2D( z.facing, speed );
+
+		if ( t >= ZL_SHUTTER_TIME )
+		{
+			VectorClear( pmove->velocity );
+			PMZ_SetAction( ZACT_STAND );
+		}
+		return;
+	}
+
+	// Player_Action_80845EF8: the animation carries him (one and a half frames an OoT frame)
+	if ( dt > 0 )
+	{
+		float frame = t * ZL_FPS * ZL_ANIM_RATE;
+		float prev = ( t - dt ) * ZL_FPS * ZL_ANIM_RATE;
+		float moved = ZL_DIST( PMZ_DoorRoot( sub, frame ) - PMZ_DoorRoot( sub, prev ) );
+		PMZ_SetVelocity2D( z.facing, moved / dt );
+	}
+
+	if ( t >= ZL_DOOR_TIME )
+	{
+		VectorClear( pmove->velocity );
+		PMZ_SetAction( ZACT_STAND );
+	}
+}
+
+/*
+=============================================================================
  Ground movement for the standing action
 =============================================================================
 */
@@ -844,7 +923,7 @@ static void PMZ_Decelerate( float stepPerFrame )
 static int PMZ_KeepsOwnSpeed( int act )
 {
 	return act != ZACT_CLIMB && act != ZACT_HOOKFLY && act != ZACT_DAMAGE && act != ZACT_KNOCKDOWN &&
-		   act != ZACT_BONK && act != ZACT_DEAD;
+		   act != ZACT_BONK && act != ZACT_DEAD && act != ZACT_SHOCK && act != ZACT_FALLSTUN;
 }
 
 static void PMZ_SpeedBegin( int act )
@@ -1083,7 +1162,8 @@ static void PMZ_ActStand( void )
 			return;
 		}
 
-		if ( ( z.pressed & ZPAD_CUP ) && !PMZ_IsZTargeting() )
+		// With Navi calling, C-up is hers (the server opens her text)
+		if ( ( z.pressed & ZPAD_CUP ) && !PMZ_IsZTargeting() && !( z.sflags & ZSF_NAVI ) )
 		{
 			PMZ_SetAction( ZACT_CUP );
 			z.facing = PMZ_AngleMod( pmove->cmd.viewangles[YAW] );
@@ -1115,7 +1195,7 @@ static void PMZ_ActStand( void )
 			if ( z.time >= ZL_FRAMES( 3.0f ) )
 			{
 				PMZ_SetAction( ZACT_JUMP );
-				PMZ_SetSub( ZJUMP_NORMAL );
+				PMZ_SetSub( ZJUMP_LEDGE );
 				pmove->velocity[2] = ZL_VEL( ( height / ZL_UNIT ) * 0.08f + 5.5f );
 				PMZ_SetVelocity2D( z.facing, ZL_VEL( 2.5f ) );
 				pmove->onground = -1;
@@ -1177,6 +1257,15 @@ static void PMZ_ActBonk( void )
 
 static void PMZ_ActAir( void )
 {
+	// Hopping up a low ledge: OoT's walls never take speedXZ away, Half-Life's clip it to nothing
+	// while he's against the wall, so it's put back until he's over the top
+	if ( PMZ_Action() == ZACT_JUMP && ZL_GetSub( z.state ) == ZJUMP_LEDGE )
+	{
+		float zv = pmove->velocity[2];
+		PMZ_SetVelocity2D( z.facing, ZL_VEL( 2.5f ) );
+		pmove->velocity[2] = zv;
+	}
+
 	// Horizontal speed is kept through the jump (speedXZ is not touched by 8084411C)
 	if ( PMZ_OnGround() && z.time > 0.05f )
 	{
@@ -1386,15 +1475,101 @@ static void PMZ_ActCUp( void )
 		PMZ_SetAction( ZACT_STAND );
 }
 
+/*
+ Taking hits (func_80837C0C). The server starts these with the push already in the velocity;
+ the timing is here so prediction plays them out.
+*/
+
+// Player_Action_8084370C: a flinch, sliding to a stop (Player_DecelerateToZero)
+static void PMZ_ActDamage( void )
+{
+	if ( PMZ_OnGround() )
+		PMZ_Decelerate( 8.0f );
+
+	if ( z.time >= ( ZL_GetMWA( z.state ) ? ZL_DAMAGE_BIG_TIME : ZL_DAMAGE_TIME ) )
+		PMZ_SetAction( ZACT_STAND );
+}
+
+static void PMZ_SetPhase( int phase )
+{
+	PMZ_SetMWA( phase );
+	z.time = 0;
+}
+
+// Player_Action_8084377C (in the air) -> _80843954 (down) -> _80843A38 (getting up)
+static void PMZ_ActKnockdown( void )
+{
+	int sub = ZL_GetSub( z.state );
+	int back = sub & ZKD_BACK;
+	int phase = ZL_GetMWA( z.state );
+	float frames = z.time * ZL_FPS;
+
+	switch ( phase )
+	{
+	case ZKD_PHASE_AIR:
+		// Flying back at the speed he was given; down once the animation is done and he's landed
+		if ( !PMZ_OnGround() || pmove->velocity[2] > 0 || frames < 1.0f )
+			break;
+
+		// The small one (actionVar2 = 4) is down too, but only stands there 4 frames
+		if ( sub & ZKD_SMALL )
+		{
+			PMZ_SetPhase( ZKD_PHASE_DOWN );
+			break;
+		}
+
+		if ( frames < ZL_KD_DOWNA_FRAMES( back ) )
+			break;
+
+		// front_downB / back_downB, NA_SE_VO_LI_FREEZE; NA_SE_PL_BOUND as he touches down
+		PMZ_Sound( CHAN_BODY, ZS_PL_BOUND, 1.0f );
+		PMZ_Sound( CHAN_VOICE, ZS_VO_FREEZE, 1.0f );
+		PMZ_SetPhase( ZKD_PHASE_DOWN );
+		break;
+
+	case ZKD_PHASE_DOWN:
+		PMZ_Decelerate( 8.0f );
+		if ( sub & ZKD_SMALL )
+		{
+			if ( frames >= ZL_KD_SMALL_WAIT )
+				PMZ_SetAction( ZACT_STAND );
+			break;
+		}
+		if ( frames >= ZL_KD_DOWNB_FRAMES( back ) && PMZ_Speed2D() < 1.0f )
+			PMZ_SetPhase( ZKD_PHASE_WAKE );
+		break;
+
+	case ZKD_PHASE_WAKE:
+		PMZ_Decelerate( 8.0f );
+		// Player_TryActionInterrupt( .., 16 ): the stick gets him moving from frame 16
+		if ( frames >= ZL_KD_WAKE_FRAMES( back ) || ( frames >= ZL_KD_WAKE_INTERRUPT && z.stickMag > 0 ) )
+			PMZ_SetAction( ZACT_STAND );
+		break;
+	}
+}
+
 static void PMZ_ActHurt( void )
 {
-	int act = PMZ_Action();
+	switch ( PMZ_Action() )
+	{
+	case ZACT_DAMAGE:		PMZ_ActDamage(); break;
+	case ZACT_KNOCKDOWN:	PMZ_ActKnockdown(); break;
 
-	if ( PMZ_OnGround() )
-		PMZ_Decelerate( act == ZACT_KNOCKDOWN ? 0.8f : 1.5f );
+	case ZACT_SHOCK:
+		// Player_Action_8084FBF4: 20 frames on the spot
+		PMZ_Decelerate( 8.0f );
+		if ( z.time >= ZL_SHOCK_TIME )
+			PMZ_SetAction( ZACT_STAND );
+		break;
 
-	if ( z.time >= ( act == ZACT_KNOCKDOWN ? ZL_KNOCKDOWN_TIME : ZL_DAMAGE_TIME ) )
-		PMZ_SetAction( ZACT_STAND );
+	case ZACT_FALLSTUN:
+		// func_80843E64: Math_StepToF( &speedXZ, 0, 1 ), and Player_Action_Idle does nothing
+		// until fallDamageStunTimer is out
+		PMZ_Decelerate( 1.0f );
+		if ( z.time >= ZL_FALLSTUN_TIME( ZL_GetSub( z.state ) ) )
+			PMZ_SetAction( ZACT_STAND );
+		break;
+	}
 }
 
 /*
@@ -1422,7 +1597,7 @@ int PMZ_Airborne( void )
 
 	act = PMZ_Action();
 	return act == ZACT_SIDEHOP || act == ZACT_BACKFLIP || act == ZACT_JUMP || act == ZACT_JUMPSLASH ||
-		   act == ZACT_FALL;
+		   act == ZACT_FALL || ( act == ZACT_KNOCKDOWN && ZL_GetMWA( z.state ) == ZKD_PHASE_AIR );
 }
 
 void PMZ_Begin( void )
@@ -1515,7 +1690,9 @@ int PMZ_Think( void )
 	case ZACT_AIM:			PMZ_ActAim(); break;
 	case ZACT_CUP:			PMZ_ActCUp(); break;
 	case ZACT_DAMAGE:
-	case ZACT_KNOCKDOWN:	PMZ_ActHurt(); break;
+	case ZACT_KNOCKDOWN:
+	case ZACT_SHOCK:
+	case ZACT_FALLSTUN:		PMZ_ActHurt(); break;
 
 	case ZACT_CLIMB:
 		pmove->cmd.forwardmove = pmove->cmd.sidemove = pmove->cmd.upmove = 0;
@@ -1533,6 +1710,11 @@ int PMZ_Think( void )
 		if ( ZL_GetSub( z.state ) == 0 )
 			z.facing = PMZ_StepAngle( z.facing, pmove->cmd.viewangles[YAW] + 180.0f, 4000.0f * ( 360.0f / 65536.0f ) * 20.0f );
 		PMZ_Decelerate( 8.0f );
+		break;
+
+	case ZACT_DOOR:
+		pmove->cmd.forwardmove = pmove->cmd.sidemove = pmove->cmd.upmove = 0;
+		PMZ_DoorMove();
 		break;
 
 	case ZACT_TALK:
@@ -1563,7 +1745,8 @@ static void PMZ_Footsteps( int act, int onground )
 	int i;
 	static const float stepFrames[2] = { 10.0f, 24.0f };
 
-	if ( !onground || ( act != ZACT_STAND && act != ZACT_SHIELD && act != ZACT_SPIN_CHARGE ) || pmove->waterlevel >= 2 )
+	if ( !onground || ( act != ZACT_STAND && act != ZACT_SHIELD && act != ZACT_SPIN_CHARGE &&
+					   !( act == ZACT_DOOR && ZL_GetSub( z.state ) == ZDOOR_SLIDING ) ) || pmove->waterlevel >= 2 )
 		return;
 
 	// The run cycle goes by speedXZ: what Link wants, not how fast he slides on ice or along a wall
@@ -1739,7 +1922,7 @@ void PMZ_End( void )
 	if ( pmove->waterlevel >= 2 || pmove->movetype == MOVETYPE_FLY )
 	{
 		int act = PMZ_Action();
-		if ( act != ZACT_STAND && act != ZACT_DEAD && act != ZACT_TALK && act != ZACT_HOOKFLY && act != ZACT_GETITEM && act != ZACT_CHEST )
+		if ( act != ZACT_STAND && act != ZACT_DEAD && act != ZACT_TALK && act != ZACT_HOOKFLY && act != ZACT_GETITEM && act != ZACT_CHEST && act != ZACT_DOOR )
 			PMZ_SetAction( ZACT_STAND );
 	}
 

@@ -139,6 +139,8 @@ HLDLL_OBJS = \
 	$(HLDLL_OBJ_DIR)/zl_player.o \
 	$(HLDLL_OBJ_DIR)/zl_sound.o \
 	$(HLDLL_OBJ_DIR)/zl_targeting.o \
+	$(HLDLL_OBJ_DIR)/zl_torch.o \
+	$(HLDLL_OBJ_DIR)/zl_door.o \
 	$(HLDLL_OBJ_DIR)/zl_gossip.o
 
 HLWPN_OBJS = \

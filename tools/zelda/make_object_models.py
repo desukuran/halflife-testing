@@ -20,6 +20,15 @@ fuser1 / fuser2, see StudioSetUpTransform).
                  turned 90 degrees about X), at the bomb's scale 0.01. The body is a flat disc
                  the game turns to face the camera; its red flash (PRIMITIVE added to the
                  texture) becomes 8 skins -> models/zelda/bomb.mdl
+  door           gameplay_keep: gDoorSkel (EnDoor), the door on limb 3 with both its faces
+                 (gDoorLeftDL, gDoorRightDL), sequences "idle", "open_l" and "open_r"
+                 (gDoorAdultOpeningLeftAnim / RightAnim) at the actor scale 0.01
+                 -> models/zelda/door.mdl
+  door_chains, door_lock
+                 gameplay_dangeon_keep: the chains and padlock on a locked door (Actor_DrawDoorLock),
+                 the chains with an "unlock" sequence -> models/zelda/door_chains.mdl, door_lock.mdl
+  door_shutter   gameplay_keep: gDungeonDoorDL, Door_Shutter's generic dungeon door, at its
+                 scale 1.0 -> models/zelda/door_shutter.mdl
   bush, bush_stump, grass
                  En_Kusa: gFieldBushDL (gameplay_field_keep), object_kusa's stump and grass tuft,
                  at its scale 0.4 -> models/zelda/bush.mdl, bush_stump.mdl, grass.mdl
@@ -72,6 +81,26 @@ OBJECTS = [
     {"name": "bush", "object": "gameplay_field_keep", "scale": 0.4, "dls": ["gFieldBushDL"]},
     {"name": "bush_stump", "object": "object_kusa", "scale": 0.4, "dls": ["object_kusa_DL_0002E0"]},
     {"name": "grass", "object": "object_kusa", "scale": 0.4, "dls": ["object_kusa_DL_000140"]},
+    # EnDoor at the actor's default scale 0.01: gDoorSkel with the door on limb 3, both faces
+    # (EnDoor_OverrideLimbDraw picks the side facing the camera; each face is one sided, so both
+    # can be drawn), sequences "idle" (shut), "open_l" and "open_r" (the adult ones)
+    {
+        "name": "door",
+        "object": "gameplay_keep",
+        "scale": 0.01,
+        "limbs": "gDoorLimbs",
+        "bones": ["root", "hinge", "turn", "door"],
+        "limb_dls": {3: ["gDoorLeftDL", "gDoorRightDL"]},
+        "anims": [("idle", "gDoorAdultOpeningLeftAnim", 0, True),
+                  ("open_l", "gDoorAdultOpeningLeftAnim", None, False),
+                  ("open_r", "gDoorAdultOpeningRightAnim", None, False)],
+    },
+    # Door_Shutter's DOORSHUTTER_GFX_GENERIC at its scale 1.0: the dungeon door that slides up
+    {"name": "door_shutter", "object": "gameplay_keep", "scale": 1.0, "dls": ["gDungeonDoorDL"]},
+    # Obj_Syokudai's stands at its scale 1.0 (the flame is drawn by the game, zl_effects.cpp)
+    {"name": "torch_golden", "object": "object_syokudai", "scale": 1.0, "dls": ["gGoldenTorchDL"]},
+    {"name": "torch_timed", "object": "object_syokudai", "scale": 1.0, "dls": ["gTimedTorchDL"]},
+    {"name": "torch_wooden", "object": "object_syokudai", "scale": 1.0, "dls": ["gWoodenTorchDL"]},
 ]
 
 # sDrawItemTable entries, display lists in the order their GetItem_Draw* function draws them
@@ -302,6 +331,107 @@ def build(obj, extracted, src_root, out_dir, studiomdl, preview):
     return True
 
 
+# Actor_DrawDoorLock's DOORLOCK_NORMAL (sDoorLocksInfo): chain angle, chain length, how far up the
+# door the lock sits, in the 0.01 scaled space the doors draw it in
+LOCK_CHAIN_ANGLE = 0.54
+LOCK_CHAIN_LENGTH = 6000.0
+LOCK_FRAMES = 10            # lockTimer: 10 locked .. 0 open
+
+
+def build_door_lock(extracted, src_root, out_dir, studiomdl):
+    """door_chains.mdl: the four chains (gDoorChainDL) across one face of a locked door, a bone each,
+    with "idle" (locked) and "unlock", where they slide off along their length over 10 frames like
+    Actor_DrawDoorLock's frame 10 -> 0. door_lock.mdl: the padlock (gDoorLockDL), which the game
+    shrinks away (its scale is frame / 10). Both centred on the lock, facing +X, in Door_Shutter's
+    space (Matrix_Scale( 0.01, 0.01, 0.025 )); the game puts one of each on both faces."""
+    import math
+    assets = ObjectAssets(extracted, "gameplay_dangeon_keep")
+    if not os.path.isdir(assets.obj):
+        print(f"door_lock: {assets.obj} not extracted")
+        return False
+    L.Material.FULL = False
+    L.SCALE = 72.0 / 68.0
+    L.FEET_Z = 0.0
+    a = LOCK_CHAIN_ANGLE
+    rots, r = [], 0.0
+    for i in range(4):
+        rots.append(r)
+        r += 2.0 * a if i % 2 else math.pi - 2.0 * a
+
+    def place(tris, first, fn):
+        for t in range(first, len(tris)):
+            mat, vs, two = tris[t]
+            vs = [(v[0], fn(v[0], v[1]), v[2]) + tuple(v[3:]) for v in vs]
+            tris[t] = (mat, vs, two)
+
+    def rotz(rz, x, y):
+        return x * math.cos(rz) - y * math.sin(rz), x * math.sin(rz) + y * math.cos(rz)
+
+    def finish(name, limbs, runner, anims):
+        src = os.path.join(src_root, name)
+        os.makedirs(os.path.join(src, "anims"), exist_ok=True)
+        bank = L.TextureBank(assets, src)
+        n = L.write_mesh_smd(os.path.join(src, "body.smd"), limbs, runner.tris, bank)
+        qc = ["// Generated by tools/zelda/make_object_models.py from your OoT ROM. Do not redistribute.",
+              f'$modelname "{name}.mdl"', '$cd "."', '$cdtexture "."', "$scale 1.0", "$origin 0 0 0 -90",
+              '$body "body" "body"']
+        for t in sorted(bank.masked):
+            qc.append(f'$texrendermode "{t}" masked')
+        for seq, frames in anims:
+            lines = L.smd_header(limbs) + ["skeleton"]
+            for k, offs in enumerate(frames):
+                lines.append(f"time {k}")
+                lines.append(L.bone_frame(limbs, [(0.0, 0.0, 0.0)] * len(limbs), [0, 0, 0])[0])
+                for i, (dx, dy) in enumerate(offs):
+                    lines.append(f"{i + 1} {dx * L.SCALE:.6f} {dy * L.SCALE:.6f} 0.000000 0.000000 0.000000 0.000000")
+            lines.append("end")
+            with open(os.path.join(src, "anims", seq + ".smd"), "w", newline="\n") as f:
+                f.write("\n".join(lines) + "\n")
+            qc.append(f'$sequence "{seq}" "anims/{seq}" fps 20' + (" loop" if seq == "idle" else ""))
+        with open(os.path.join(src, f"{name}.qc"), "w", newline="\n") as f:
+            f.write("\n".join(qc) + "\n")
+        print(f"{name}: {n} triangles")
+        if not studiomdl:
+            print(f"  studiomdl not found: compile {os.path.join(src, name + '.qc')} yourself")
+            return True
+        res = subprocess.run([studiomdl, f"{name}.qc"], cwd=src, capture_output=True, text=True)
+        mdl = os.path.join(src, f"{name}.mdl")
+        if res.returncode != 0 or not os.path.exists(mdl):
+            print("\n".join((res.stdout + res.stderr).strip().split("\n")[-10:]))
+            return False
+        os.makedirs(out_dir, exist_ok=True)
+        shutil.copyfile(mdl, os.path.join(out_dir, f"{name}.mdl"))
+        print(f"  wrote {os.path.join(out_dir, name + '.mdl')}")
+        return True
+
+    def bone(name, parent):
+        return {"name": name, "joint": [0, 0, 0], "parent": parent, "child": 255, "sibling": 255, "dl": None}
+
+    # The chains: Matrix_RotateZ( chainRotZ ), then out along their length
+    runner = L.DLRunner(assets, [0], (255, 255, 255))
+    for i, rz in enumerate(rots):
+        first = len(runner.tris)
+        runner.run("gDoorChainDL", i + 1)
+        place(runner.tris, first, lambda limb, p, rz=rz: (*(c * 0.01 for c in rotz(rz, p[0], p[1])), p[2] * 0.025))
+    limbs = [bone("root", -1)] + [bone(f"chain{i}", 0) for i in range(4)]
+    L.BONE_NAMES = [l["name"] for l in limbs]
+    frames = []
+    for f in range(LOCK_FRAMES, -1, -1):
+        tx = -(LOCK_FRAMES - f) * math.sin(a) * 0.1 * LOCK_CHAIN_LENGTH
+        ty = (LOCK_FRAMES - f) * math.cos(a) * 0.1 * LOCK_CHAIN_LENGTH
+        frames.append([tuple(c * 0.01 for c in rotz(rz, tx, ty)) for rz in rots])
+    ok = finish("door_chains", limbs, runner, [("idle", frames[:1]), ("unlock", frames)])
+
+    # The padlock
+    runner = L.DLRunner(assets, [0], (255, 255, 255))
+    runner.run("gDoorLockDL", 0)
+    place(runner.tris, 0, lambda limb, p: (p[0] * 0.01, p[1] * 0.01, p[2] * 0.025))
+    limbs = [bone("root", -1)]
+    L.BONE_NAMES = ["root"]
+    ok &= finish("door_lock", limbs, runner, [("idle", [[]])])
+    return ok
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--oot", required=True)
@@ -320,6 +450,8 @@ def main():
         if args.only and obj["name"] not in args.only:
             continue
         ok &= build(obj, extracted, args.src, args.out, smdl, args.preview)
+    if not args.only or "door_lock" in args.only:
+        ok &= build_door_lock(extracted, args.src, args.out, smdl)
     sys.exit(0 if ok else 1)
 
 

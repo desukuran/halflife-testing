@@ -263,6 +263,18 @@ void ZInput_CreateMove( float frametime, struct usercmd_s *cmd, int active )
 	int pressed = pad & ~lastPad;
 	lastPad = pad;
 
+	// Dead: the Game Over screen's Yes / No (single player; in multiplayer the buttons go through
+	// for Half-Life's respawn)
+	if ( ZDeath_Active() )
+	{
+		float maxs = 400.0f;
+		float stickX = cmd->sidemove > maxs * 0.3f ? 1.0f : ( cmd->sidemove < -maxs * 0.3f ? -1.0f : 0.0f );
+		ZDeath_Input( pressed, stickX );
+		if ( !ZDeath_Multiplayer() )
+			cmd->buttons = 0;
+		cmd->forwardmove = cmd->sidemove = cmd->upmove = 0;
+	}
+
 	// Text box eats the pad; Link is frozen anyway
 	if ( ZText_IsOpen() )
 	{

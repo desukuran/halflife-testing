@@ -12,7 +12,9 @@ What's in it:
   - two zombies and two headcrabs to Z-target, roll past and sword
   - a scientist and a guard to talk to (they'll follow you if you ask)
   - a chest with the Fairy Bow, a Hookshot on a pedestal, a Bomb Bag, rupees and hearts
-  - breakable crates for bombs, a door that opens with A, a sign, Navi's hint on spawn
+  - breakable crates for bombs, a sign, Navi's hint on spawn
+  - a door to open (zl_door) and a locked dungeon door that slides up (zl_door_shutter) into a
+    little room with a chest; its small key is by the bow chest
   - ambient_zmusic playing music/oot/test.miniusf (put any rip there, or a .wav)
 
 Textures default to names from halflife.wad; change TEX_* if your editor complains.
@@ -26,7 +28,6 @@ TEX_CEIL = "GENERIC015V"
 TEX_LEDGE = "CRATE01"
 TEX_WOOD = "TRRM_WOOD"       # halflife.wad; "wood" in the name keeps it hookable
 TEX_CRATE = "CRATE04"
-TEX_DOOR = "LAB1_DOOR2A"
 TEX_SIGN = "WOOD_SIGN"
 
 
@@ -82,7 +83,18 @@ def main():
     world.append(box((-T, -T, PIT), (0, D + T, H), TEX_WALL))                    # west
     world.append(box((W, -T, PIT), (W + T, D + T, H), TEX_WALL))                 # east
     world.append(box((0, -T, PIT), (W, 0, H), TEX_WALL))                         # south
-    world.append(box((0, D, PIT), (W, D + T, H), TEX_WALL))                      # north
+    # North, with a doorway into a little dungeon room for the sliding door (Door_Shutter: 80 x 110
+    # OoT units, 85 x 117 here)
+    world.append(box((0, D, PIT), (300, D + T, H), TEX_WALL))                    # north
+    world.append(box((388, D, PIT), (W, D + T, H), TEX_WALL))
+    world.append(box((300, D, 120), (388, D + T, H), TEX_WALL))
+
+    # The dungeon room behind it
+    world.append(box((184, D + T, -16), (516, 1312, 0), TEX_FLOOR))
+    world.append(box((184, D + T, 200), (516, 1312, 216), TEX_CEIL))
+    world.append(box((184, D + T, 0), (200, 1312, 200), TEX_WALL))
+    world.append(box((500, D + T, 0), (516, 1312, 200), TEX_WALL))
+    world.append(box((200, 1296, 0), (500, 1312, 200), TEX_WALL))
 
     # Ledges along the south wall: 40 (step up), 64 (climb), 100 (too high)
     world.append(box((96, 0, 0), (224, 96, 40), TEX_LEDGE))
@@ -97,10 +109,10 @@ def main():
     world.append(box((1408, 640, PIT), (1536, 1024, 160), TEX_LEDGE))            # high platform
     world.append(box((1528, 700, 160), (1536, 960, 320), TEX_WOOD))              # hookshot target
 
-    # Divider with a door
-    world.append(box((640, 640, 0), (656, 704, H), TEX_WALL))
-    world.append(box((640, 832, 0), (656, 1024, H), TEX_WALL))
-    world.append(box((640, 704, 128), (656, 832, H), TEX_WALL))
+    # Divider with a doorway for a door (EnDoor: 60 x 100 OoT units, 64 x 106 here)
+    world.append(box((640, 640, 0), (656, 736, H), TEX_WALL))
+    world.append(box((640, 800, 0), (656, 1024, H), TEX_WALL))
+    world.append(box((640, 736, 112), (656, 800, H), TEX_WALL))
 
     # Pedestal for the hookshot
     world.append(box((832, 832, 0), (896, 896, 32), TEX_LEDGE))
@@ -152,6 +164,11 @@ def main():
         ents.append(entity("item_zl_rupee" if i < 3 else "item_zl_rupee_blue", {"origin": f"{x} {y} {z}"}))
     ents.append(entity("item_zl_heart", {"origin": "1460 820 168"}))
 
+    # Standing torches (Obj_Syokudai): lit golden and wooden ones, and an unlit timed one
+    ents.append(entity("zl_torch", {"origin": "320 300 0", "type": "0"}))
+    ents.append(entity("zl_torch", {"origin": "480 300 0", "type": "2"}))
+    ents.append(entity("zl_torch", {"origin": "560 420 0", "type": "1", "spawnflags": "1"}))
+
     # Grass and bushes to cut (En_Kusa)
     for x, y in [(100, 880), (150, 940), (200, 880), (250, 960)]:
         ents.append(entity("zl_grass", {"origin": f"{x} {y} 0", "type": "1"}))
@@ -165,10 +182,16 @@ def main():
         ents.append(entity("func_breakable", {"material": "1", "health": "20", "spawnobject": "0"},
                            [box((x, y, 0), (x + 48, y + 48, 48), TEX_CRATE)]))
 
-    # Door in the divider, opens with A (use)
-    ents.append(entity("func_door", {"angles": "-90 0 0", "speed": "120", "wait": "4", "lip": "8",
-                                     "spawnflags": "256", "targetname": "zl_door"},
-                       [box((640, 704, 0), (656, 832, 128), TEX_DOOR)]))
+    # The door in the divider (En_Door): face it and press A
+    ents.append(entity("zl_door", {"origin": "648 768 0", "angles": "0 0 0"}))
+
+    # The dungeon door (Door_Shutter), locked: the small key is by the chest
+    ents.append(entity("zl_door_shutter", {"origin": "344 1032 0", "angles": "0 90 0", "spawnflags": "1"}))
+    ents.append(entity("item_zl_key", {"origin": "580 900 8"}))
+    ents.append(entity("light", {"origin": "344 1160 180", "_light": "255 200 150 150"}))
+    ents.append(entity("zl_torch", {"origin": "240 1250 0", "type": "0"}))
+    ents.append(entity("zl_torch", {"origin": "450 1250 0", "type": "0"}))
+    ents.append(entity("zl_chest", {"origin": "344 1220 0", "angles": "0 270 0", "item": "item_zl_rupee_red"}))
 
     with open(out, "w", newline="\n") as f:
         f.write("// Generated by tools/zelda/make_test_map.py\n")

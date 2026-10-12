@@ -90,11 +90,28 @@ BOOL CLinkPlayer::ZTryBlock( entvars_t *pevInflictor, int bitsDamageType )
 	return TRUE;
 }
 
-// func_80837C0C: flinch or get knocked down
+/*
+ func_80837C0C: how Link takes a hit. Half-Life damage picks OoT's hit response the way the
+ attacker's collider would (Player_UpdateDamage, func_808382DC):
+   DMG_SHOCK                          PLAYER_HIT_RESPONSE_ELECTRIFIED
+   DMG_BLAST, or a hit of 2 hearts+   HIT_SPECIAL_EFFECT_KNOCKBACK: KNOCKBACK_LARGE at 4 / 5
+   anything else                      PLAYER_HIT_RESPONSE_NONE at 4 / 5
+ DMG_CLUB of a heart or more        KNOCKBACK_SMALL at 3 / 6
+ (the 2 heart and club rules are the port's: OoT knocks Link back with the attack's own
+ effect or Actor_SetPlayerKnockback*, which Half-Life's monsters don't have).
+*/
+enum
+{
+	ZHR_NONE,
+	ZHR_KNOCKBACK_LARGE,
+	ZHR_KNOCKBACK_SMALL,
+	ZHR_ELECTRIFIED,
+};
+
 void CLinkPlayer::ZApplyKnockback( entvars_t *pevInflictor, int healthUnits, int bitsDamageType )
 {
+	// yRot: the way the hit pushes him (Actor_WorldYawTowardActor( ac, player ))
 	Vector away = -ZForward();
-
 	if ( pevInflictor && pevInflictor != pev )
 	{
 		away = pev->origin - pevInflictor->origin;
@@ -103,39 +120,87 @@ void CLinkPlayer::ZApplyKnockback( entvars_t *pevInflictor, int healthUnits, int
 			away = -ZForward();
 		away = away.Normalize();
 	}
+	float pushYaw = UTIL_VecToYaw( away );
+	float rel = UTIL_AngleDiff( pushYaw, ZFacing() );		// yRot -= shape.rot.y
+	BOOL fromFront = fabs( rel ) > 90.0f;					// ABS( yRot ) > 0x4000
 
+	int response = ZHR_NONE;
+	if ( bitsDamageType & DMG_SHOCK )
+		response = ZHR_ELECTRIFIED;
+	else if ( ( bitsDamageType & DMG_BLAST ) || healthUnits >= ZL_HEART * 2 )
+		response = ZHR_KNOCKBACK_LARGE;
+	else if ( ( bitsDamageType & DMG_CLUB ) && healthUnits >= ZL_HEART )
+		response = ZHR_KNOCKBACK_SMALL;
+
+	BOOL onground = ( pev->flags & FL_ONGROUND ) != 0;
 	int act = ZAction();
-	BOOL locked = ( pev->iuser4 & ZL_STATE_LOCKED ) != 0;
 
-	// Big hits and explosions knock Link off his feet (link_normal_front_downA)
-	if ( ( bitsDamageType & DMG_BLAST ) || healthUnits >= ZL_HEART * 2 )
+	if ( m_hZHeldBomb != NULL )
+		ZThrowBomb( TRUE );			// func_80832564: Player_DetachHeldActor
+
+	if ( response == ZHR_ELECTRIFIED )
 	{
+		// Player_AnimPlayLoopAdjusted( electric_shock ), 20 frames, NA_SE_VO_LI_TAKEN_AWAY all along
+		ZSetAction( ZACT_SHOCK );
+		pev->velocity.x = pev->velocity.y = 0;
+		ZSound( CHAN_VOICE, ZS_VO_TAKEN_AWAY );
+		m_flZShockUntil = gpGlobals->time + ZL_SHOCK_TIME + ZL_SHOCK_END_TIME;
+		return;
+	}
+
+	if ( response == ZHR_KNOCKBACK_LARGE || response == ZHR_KNOCKBACK_SMALL || !onground ||
+		 act == ZACT_CLIMB || act == ZACT_HOOKFLY )
+	{
+		// Player_Action_8084377C: off his feet
 		ZSetAction( ZACT_KNOCKDOWN );
-		pev->velocity = away * ZL_VEL( 6.0f );
-		pev->velocity.z = ZL_VEL( 6.0f );
+		int sub = fromFront ? 0 : ZKD_BACK;
+		float speed = 4.0f, yVel = 5.0f;
+		if ( response == ZHR_KNOCKBACK_SMALL )
+		{
+			sub |= ZKD_SMALL;
+			speed = 3.0f;
+			yVel = 6.0f;
+			ZSound( CHAN_VOICE, ZS_VO_DAMAGE_S );
+		}
+		else
+			ZSound( CHAN_VOICE, ZS_VO_FALL_L );
+		pev->iuser4 = ( pev->iuser4 & ~( ZL_STATE_SUB_MASK | ZL_STATE_MWA_MASK ) ) |
+					  ( ( sub << ZL_STATE_SUB_SHIFT ) & ZL_STATE_SUB_MASK ) |
+					  ( ( ZKD_PHASE_AIR << ZL_STATE_MWA_SHIFT ) & ZL_STATE_MWA_MASK );
+
+		pev->velocity = away * ZL_VEL( speed );
+		pev->velocity.z = ZL_VEL( yVel );
 		pev->flags &= ~FL_ONGROUND;
-		ZSound( CHAN_VOICE, ZS_VO_FALL_L );
-		return;
 	}
-
-	// Running full tilt and not locked on: keep running (unk_890 = 20)
-	Vector flat = pev->velocity;
-	flat.z = 0;
-	if ( act == ZACT_STAND && flat.Length() > ZL_VEL( 4.0f ) && !locked )
+	else
 	{
-		ZSound( CHAN_VOICE, ZS_VO_DAMAGE_S );
-		return;
-	}
+		// Running hard and not locked onto an enemy: he runs on (unk_890 = 20)
+		Vector flat = pev->velocity;
+		flat.z = 0;
+		BOOL hostile = ( pev->iuser3 & ZSF_HOSTILE ) != 0;
+		if ( flat.Length() > ZL_VEL( 4.0f ) && !hostile && act == ZACT_STAND )
+		{
+			ZSound( CHAN_VOICE, ZS_VO_DAMAGE_S );
+			return;
+		}
 
-	if ( act == ZACT_STAND || act == ZACT_SLASH || act == ZACT_SPIN_CHARGE || act == ZACT_LAND || act == ZACT_SHIELD ||
-		 act == ZACT_AIM || act == ZACT_CUP || act == ZACT_DAMAGE )
-	{
+		// Player_Action_8084370C: a flinch from D_808544B0
 		ZSetAction( ZACT_DAMAGE );
-		// colChkInfo.damage >= 5 gives the big shove (speedXZ 23, toned down here)
-		pev->velocity = away * ZL_VEL( healthUnits >= 5 ? 12.0f : 3.0f );
+		int sub = ( fromFront ? 0 : ZHIT_BACK ) | ( hostile ? ZHIT_LOCKED : 0 );
+		BOOL big = healthUnits >= 5;
+		pev->iuser4 = ( pev->iuser4 & ~( ZL_STATE_SUB_MASK | ZL_STATE_MWA_MASK ) ) |
+					  ( ( sub << ZL_STATE_SUB_SHIFT ) & ZL_STATE_SUB_MASK ) |
+					  ( ( ( big ? 1 : 0 ) << ZL_STATE_MWA_SHIFT ) & ZL_STATE_MWA_MASK );
+
+		// speedXZ along the push: 23 for the big ones, what he had for the small ones
+		float speed = big ? ZL_VEL( ZL_DAMAGE_BIG_SPEED ) : flat.Length();
+		pev->velocity.x = away.x * speed;
+		pev->velocity.y = away.y * speed;
+		ZSound( CHAN_VOICE, ZS_VO_DAMAGE_S );
 	}
 
-	ZSound( CHAN_VOICE, ZS_VO_DAMAGE_S );
+	// shape.rot.y turns to the push, and round to face where it came from when that was in front
+	pev->fuser1 = UTIL_AngleMod( fromFront ? pushYaw + 180.0f : pushYaw );
 }
 
 int CLinkPlayer::TakeDamage( entvars_t *pevInflictor, entvars_t *pevAttacker, float flDamage, int bitsDamageType )
@@ -149,7 +214,7 @@ int CLinkPlayer::TakeDamage( entvars_t *pevInflictor, entvars_t *pevAttacker, fl
 	int act = ZAction();
 
 	// Nobody hits Link while he is reading
-	if ( act == ZACT_TALK || act == ZACT_GETITEM || act == ZACT_CHEST || m_hZTalkTo != NULL )
+	if ( act == ZACT_TALK || act == ZACT_GETITEM || act == ZACT_CHEST || act == ZACT_DOOR || m_hZTalkTo != NULL )
 		return 0;
 
 	// Intangibility after a hit (invincibilityTimer)
@@ -178,38 +243,73 @@ int CLinkPlayer::TakeDamage( entvars_t *pevInflictor, entvars_t *pevAttacker, fl
 
 	if ( ret && IsAlive() )
 	{
+		// Player_SetIntangibility( this, 20 ), NA_SE_PL_DAMAGE
 		m_flZInvincibleUntil = gpGlobals->time + ZL_INVINCIBILITY_TIME;
-
-		if ( m_hZHeldBomb != NULL )
-			ZThrowBomb( TRUE );
+		ZSound( CHAN_BODY, ZS_PL_DAMAGE, 0.7f );
 
 		if ( !( bitsDamageType & ( DMG_FALL | DMG_DROWN ) ) )
 			ZApplyKnockback( pevInflictor, units, bitsDamageType );
-
-		ZSound( CHAN_BODY, ZS_PL_DAMAGE, 0.7f );
+		else if ( m_hZHeldBomb != NULL )
+			ZThrowBomb( TRUE );
 	}
 
 	return ret;
 }
 
-// func_80843E64 / D_80854600: half a heart from 400 units, a full heart from 800
+/*
+ Falling (Player_Action_8084411C, func_80843E64)
+   - starting down with the floor more than 800 below: NA_SE_VO_LI_FALL_S
+   - 120 fallen with the floor still more than 280 below: NA_SE_VO_LI_FALL_L, once
+   - landing from 400: half a heart, from 800 a whole one (D_80854600), 40 frames intangible, a
+     quake, NA_SE_PL_BODY_HIT and NA_SE_VO_LI_LAND_DAMAGE_S, then link_normal_landing to frame 8
+     and 10 / 20 frames stunned (fallDamageStunTimer)
+   - landing in a roll (the stick forward, under 800) takes no damage at all, nor does being
+     knocked down
+*/
 void CLinkPlayer::ZFallDamageThink( void )
 {
 	BOOL onground = ( pev->flags & FL_ONGROUND ) != 0;
+	int act = ZAction();
 
 	if ( !onground )
 	{
-		if ( m_fZWasOnGround || pev->waterlevel > 0 || ZAction() == ZACT_HOOKFLY || ZAction() == ZACT_CLIMB )
+		if ( m_fZWasOnGround || pev->waterlevel > 0 || act == ZACT_HOOKFLY || act == ZACT_CLIMB )
+		{
 			m_flZFallStartZ = pev->origin.z;
+			m_iZFallVoice = 0;
+		}
 		else if ( pev->origin.z > m_flZFallStartZ )
 			m_flZFallStartZ = pev->origin.z;
+
+		// The screams, on the way down (not knocked flying, not swimming)
+		if ( pev->velocity.z < 0 && act != ZACT_KNOCKDOWN && act != ZACT_HOOKFLY && act != ZACT_CLIMB &&
+			 pev->waterlevel == 0 && m_iZFallVoice < 2 )
+		{
+			TraceResult tr;
+			Vector feet = pev->origin + Vector( 0, 0, pev->mins.z );
+			UTIL_TraceLine( feet, feet - Vector( 0, 0, ZL_DIST( 2000 ) ), ignore_monsters, edict(), &tr );
+			float toFloor = tr.flFraction * 2000.0f;		// OoT units (sYDistToFloor)
+			float fallen = ( m_flZFallStartZ - pev->origin.z ) / ZL_UNIT;
+
+			if ( m_iZFallVoice == 0 )
+			{
+				if ( toFloor > 800.0f )
+					ZSound( CHAN_VOICE, ZS_VO_FALL_S );
+				m_iZFallVoice = 1;
+			}
+			else if ( fallen > 120.0f && toFloor > 280.0f )
+			{
+				ZSound( CHAN_VOICE, ZS_VO_FALL_L );
+				m_iZFallVoice = 2;
+			}
+		}
 	}
 	else if ( !m_fZWasOnGround )
 	{
 		float fallDistance = ( m_flZFallStartZ - pev->origin.z ) / ZL_UNIT;
 		int damage = 0;
 
-		if ( pev->waterlevel == 0 )
+		if ( pev->waterlevel == 0 && act != ZACT_KNOCKDOWN && act != ZACT_ROLL && act != ZACT_DEAD )
 		{
 			if ( fallDistance >= 800 )
 				damage = 16;
@@ -223,12 +323,21 @@ void CLinkPlayer::ZFallDamageThink( void )
 			TakeDamage( VARS( eoNullEntity ), VARS( eoNullEntity ), damage, DMG_FALL );
 			m_fZDirectDamage = FALSE;
 
-			// Player_SetIntangibility( this, 40 )
-			m_flZInvincibleUntil = gpGlobals->time + ZL_FRAMES( 40 );
-			UTIL_ScreenShake( pev->origin, 4, 30, 0.5f, 64 );
-			ZSound( CHAN_BODY, ZS_PL_BODY_HIT );
-			ZSound( CHAN_VOICE, ZS_VO_LAND_DAMAGE_S );
+			if ( IsAlive() )
+			{
+				// Player_SetIntangibility( this, 40 ), Player_RequestQuake( play, 32967, 2, 30 )
+				m_flZInvincibleUntil = gpGlobals->time + ZL_FRAMES( 40 );
+				UTIL_ScreenShake( pev->origin, 2, 30, ZL_FRAMES( 30 ), 64 );
+				ZSound( CHAN_BODY, ZS_PL_BODY_HIT );
+				ZSound( CHAN_VOICE, ZS_VO_LAND_DAMAGE_S );
+
+				// fallDamageStunTimer
+				ZSetAction( ZACT_FALLSTUN );
+				pev->iuser4 = ( pev->iuser4 & ~ZL_STATE_SUB_MASK ) |
+							  ( ( ( damage >= 16 ? 1 : 0 ) << ZL_STATE_SUB_SHIFT ) & ZL_STATE_SUB_MASK );
+			}
 		}
+		m_iZFallVoice = 0;
 	}
 
 	m_fZWasOnGround = onground;

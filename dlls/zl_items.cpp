@@ -922,7 +922,7 @@ void CLinkPlayer::ZItemButtonDown( int slot )
 	int item = m_ZInv.cButton[slot];
 	int act = ZAction();
 
-	if ( act == ZACT_TALK || act == ZACT_GETITEM || act == ZACT_CHEST || act == ZACT_DEAD || act == ZACT_HOOKFLY )
+	if ( act == ZACT_TALK || act == ZACT_GETITEM || act == ZACT_CHEST || act == ZACT_DOOR || act == ZACT_DEAD || act == ZACT_HOOKFLY )
 		return;
 
 	if ( item == ZITEM_NONE )
@@ -1295,8 +1295,12 @@ void CZeldaPickup::Spawn( void )
 	}
 
 	SET_MODEL( ENT( pev ), gi ? gi : info.model );
-	// The get-item models are centred on their origin: lift them off the floor
+	// The get-item models are centred on their origin: lift them off the floor. Their box reaches
+	// 10 under the origin, so the origin goes up by that much too: placed on (or just over) the
+	// floor, the box would start in it and the item drop out of the world.
 	UTIL_SetSize( pev, Vector( -12, -12, gi ? -10 : 0 ), Vector( 12, 12, gi ? 14 : 24 ) );
+	if ( gi )
+		pev->origin.z += 10;
 	UTIL_SetOrigin( pev, pev->origin );
 	pev->scale = gi ? 1.0f : info.scale;
 

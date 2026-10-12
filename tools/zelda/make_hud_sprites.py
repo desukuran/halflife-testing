@@ -645,6 +645,54 @@ def bake_spin_charge(out, name, t0, t1, strength):
               spin_palette(SPIN_PRIM[strength], [SPIN_CHARGE_ENV[strength]]))
 
 
+# The torch flame (ObjSyokudai_Draw: gEffFire1DL): gEffFire2Tex (32x64) and gEffFire1Tex
+# (32x128, scrolling up 20 quarter texels a frame), mixed like the spin attack's
+# (TEXEL1 - PRIMITIVE) * PRIM_LOD_FRAC 0x80 + TEXEL0, PRIMITIVE (255, 255, 0) over ENVIRONMENT
+# (255, 0, 0). The scroll repeats every 128 frames, all baked.
+FLAME_FRAMES = 128
+
+
+def bake_flame(out, fire1, fire2):
+    w, h = 32, 64
+    frames = []
+    for f in range(FLAME_FRAMES):
+        off = ((f * -20) & 0x1FF) / 4.0
+        data = bytearray()
+        for y in range(h):
+            for x in range(w):
+                t0 = fire2[y][x]
+                t1 = fire1[int(round(y - off)) % 128][x]
+                data.append(spin_index(t0, t1, 0))
+        frames.append((w, h, bytes(data)))
+    write_spr(os.path.join(out, "zl_flame.spr"), frames, SPR_ADDITIVE, spin_palette((255, 255, 0), [(255, 0, 0)]))
+
+
+def make_glow(out):
+    """Stand-in for the lights' halo (gCircleGlowLTex mirrored): a soft round falloff"""
+    img = Image.new("L", (64, 64))
+    px = img.load()
+    for y in range(64):
+        for x in range(64):
+            d = math.hypot(x - 31.5, y - 31.5) / 32.0
+            px[x, y] = int(255 * clamp01(1.0 - d) ** 2)
+    write_spr(os.path.join(out, "zl_glow.spr"), [alpha_frame(img)], SPR_INDEXALPHA, indexalpha_palette())
+
+
+def make_flame(out):
+    """Stand-in: a teardrop for the still texture, noise for the scrolling one"""
+    fire2 = []
+    for y in range(64):
+        row = []
+        for x in range(32):
+            dx = (x - 15.5) / 16.0
+            t = y / 63.0                      # 0 top, 1 bottom
+            width = 0.15 + 0.85 * math.sin(min(1.0, t * 1.2) * math.pi * 0.5)
+            row.append(clamp01((1.0 - abs(dx) / max(0.05, width)) * (0.3 + 0.7 * t)))
+        fire2.append(row)
+    fire1 = noise_texture(32, 128, 7, 3.0)
+    bake_flame(out, fire1, fire2)
+
+
 # EffectSsHitMark sColors: (prim, env) at the start and the end, for EFFECT_HITMARK_WHITE / _METAL
 HITMARK_COLORS = [
     (((255, 255, 255), (255, 255, 0)), ((255, 255, 255), (255, 0, 0))),
@@ -761,6 +809,8 @@ def main():
     make_magic(out)
     make_item_icons(out)
     make_sword_effects(out)
+    make_flame(out)
+    make_glow(out)
     make_font(out, args.font, os.path.normpath(args.header))
 
 

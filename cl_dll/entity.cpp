@@ -324,6 +324,10 @@ void CL_DLLEXPORT HUD_CreateEntities( void )
 	Game_AddObjects();
 
 	GetClientVoiceMgr()->CreateEntities();
+
+	// Zelda: Link's arms while aiming in first person
+	extern void ZCam_AddEntities( void );
+	ZCam_AddEntities();
 }
 
 #if defined( _TFC )

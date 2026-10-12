@@ -100,6 +100,18 @@ enum zl_sound_e
 	ZS_PL_CALM_HIT,
 	ZS_IT_HAMMER_SWING,
 	ZS_EV_PLANT_BROKEN,		// cutting grass (En_Kusa)
+	ZS_EV_TORCH,			// a lit torch (Obj_Syokudai)
+	ZS_EV_FLAME_IGNITION,
+	ZS_OC_DOOR_OPEN,		// doors (En_Door, Door_Shutter)
+	ZS_EV_DOOR_CLOSE,
+	ZS_EV_SLIDE_DOOR_OPEN,
+	ZS_EV_SLIDE_DOOR_CLOSE,
+	ZS_EV_STONE_BOUND,
+	ZS_EV_CHAIN_KEY_UNLOCK,
+	ZS_VO_FREEZE,			// taking hits (func_80837C0C and the knockdown)
+	ZS_VO_FALL_S,
+	ZS_VO_TAKEN_AWAY,
+	ZS_PL_BOUND,
 
 	// System (NA_SE_SY_*)
 	ZS_SY_LOCK_ON,
@@ -248,6 +260,18 @@ static const zl_sound_t g_zlSounds[ZS_COUNT] =
 	{ "player/pl_duct3.wav",			"NA_SE_PL_CALM_HIT", 2, 0 },			// patting his tunic
 	{ "weapons/cbar_miss1.wav",			"NA_SE_IT_HAMMER_SWING", 1, 0 },		// the idle sword twirl
 	{ "debris/wood3.wav",				"NA_SE_EV_PLANT_BROKEN", 1, 0 },		// grass / a bush cut
+	{ "ambience/burning1.wav",			"NA_SE_EV_TORCH", 0, 0 },				// a lit torch crackling
+	{ "ambience/flameburst1.wav",		"NA_SE_EV_FLAME_IGNITION", 2, 0 },		// a torch catching
+	{ "doors/doormove2.wav",			"NA_SE_OC_DOOR_OPEN", 0, 0 },			// a door swinging open
+	{ "doors/doorstop2.wav",			"NA_SE_EV_DOOR_CLOSE", 0, 0 },			// and shutting behind Link
+	{ "doors/doormove3.wav",			"NA_SE_EV_SLIDE_DOOR_OPEN", 0, 0 },		// a dungeon door sliding up
+	{ "doors/doormove3.wav",			"NA_SE_EV_SLIDE_DOOR_CLOSE", 0, 0 },	// and coming down
+	{ "doors/doorstop1.wav",			"NA_SE_EV_STONE_BOUND", 0, 0 },			// its thud at the bottom
+	{ "doors/latchunlocked1.wav",		"NA_SE_EV_CHAIN_KEY_UNLOCK", 0, 0 },	// a small key in a locked door
+	{ "player/pl_pain7.wav",			"NA_SE_VO_LI_FREEZE", 0, 0 },			// knocked down: hitting the ground
+	{ "player/pl_pain4.wav",			"NA_SE_VO_LI_FALL_S", 0, 0 },			// starting a long drop
+	{ "player/pl_pain6.wav",			"NA_SE_VO_LI_TAKEN_AWAY", 0, 0 },		// electrocuted
+	{ "common/bodydrop4.wav",			"NA_SE_PL_BOUND", 0, 0 },				// knocked down: body on the ground
 
 	// ZS_SY_*
 	{ "buttons/blip2.wav",				"NA_SE_SY_LOCK_ON", 0, 0 },

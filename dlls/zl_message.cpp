@@ -375,6 +375,13 @@ BOOL ZL_ClientCommand( CBasePlayer *pPlayer, const char *pcmd )
 		return TRUE;
 	}
 
+	// zl_continue <1|0>: the Game Over screen's Yes / No
+	if ( FStrEq( pcmd, "zl_continue" ) )
+	{
+		pLink->ZContinue( CMD_ARGC() > 1 && atoi( CMD_ARGV( 1 ) ) != 0 );
+		return TRUE;
+	}
+
 	if ( FStrEq( pcmd, "zmsg_test" ) )
 	{
 		// zmsg_test <message name>: show any entry from zl_messages.txt

@@ -43,6 +43,20 @@ static struct model_s *s_sprWhite;
 static struct model_s *s_sprRing[2];		// blue, orange (zl_spinring_w / _s)
 static struct model_s *s_sprCharge[2];		// zl_spincharge_b / _o
 static struct model_s *s_sprHitmark;
+static struct model_s *s_sprFlame;
+static struct model_s *s_sprGlow;
+
+// Standing torches drawn this frame (ZFx_TorchDrawn), their flames drawn here
+#define ZFX_MAX_TORCHES	64
+struct zfx_torch_t
+{
+	int		index;
+	vec3_t	origin;
+	float	scale;
+};
+static zfx_torch_t s_torches[ZFX_MAX_TORCHES];
+static int s_numTorches;
+static float s_torchFrame = -1;
 
 struct zfx_sample_t
 {
@@ -579,6 +593,123 @@ static void ZFx_DrawMarks( float now )
 	}
 }
 
+void ZFx_TorchDrawn( int index, const float *origin, float yaw, float scale )
+{
+	float now = gEngfuncs.GetClientTime();
+	if ( now != s_torchFrame )
+	{
+		s_torchFrame = now;
+		s_numTorches = 0;
+	}
+	for ( int i = 0; i < s_numTorches; i++ )
+	{
+		if ( s_torches[i].index == index )
+			return;
+	}
+	if ( s_numTorches >= ZFX_MAX_TORCHES )
+		return;
+	zfx_torch_t *t = &s_torches[s_numTorches++];
+	t->index = index;
+	VectorCopy( origin, t->origin );
+	t->scale = scale;
+}
+
+/*
+ ObjSyokudai_Draw: gEffFire1DL 52 up, turned to the camera about the vertical, at 0.0027 x the
+ flame's size: gEffFireVtx is 8000 wide and 16000 tall from its base. Its two textures scroll
+ (flameTexScroll, from a random start), baked into zl_flame.spr. ObjSyokudai_Update: a point
+ light 70 up, (b, b, 0) with b 128..255 anew every frame, over 200; Lights_DrawGlow puts a halo
+ on it, gGlowCircleDL at radius^2 x 0.0000026 in the light's colour at alpha 50.
+*/
+static void ZFx_DrawTorches( float now )
+{
+	triangleapi_t *tri = gEngfuncs.pTriAPI;
+	vec3_t fwd, right, up;
+
+	if ( now != s_torchFrame || !s_numTorches )
+		return;
+
+	gEngfuncs.pfnAngleVectors( v_angles, fwd, right, up );
+	float side[3] = { right[0], right[1], 0 };
+	float len = sqrtf( side[0] * side[0] + side[1] * side[1] );
+	if ( len < 0.001f )
+		return;
+	side[0] /= len;
+	side[1] /= len;
+
+	int tick = (int)( now * ZL_FPS );
+
+	for ( int i = 0; i < s_numTorches; i++ )
+	{
+		zfx_torch_t *t = &s_torches[i];
+
+		// The flame
+		if ( s_sprFlame && tri->SpriteTexture( s_sprFlame, ( tick + t->index * 37 ) % s_sprFlame->numframes ) )
+		{
+			float halfW = 4000.0f * 0.0027f * t->scale * ZL_UNIT;
+			float height = 16000.0f * 0.0027f * t->scale * ZL_UNIT;
+			float base = t->origin[2] + ZL_DIST( 52.0f );
+			float p[4][3];
+			for ( int k = 0; k < 2; k++ )
+			{
+				p[0][k] = t->origin[k] - side[k] * halfW;
+				p[1][k] = t->origin[k] + side[k] * halfW;
+				p[2][k] = p[1][k];
+				p[3][k] = p[0][k];
+			}
+			p[0][2] = p[1][2] = base + height;
+			p[2][2] = p[3][2] = base;
+
+			tri->RenderMode( kRenderTransAdd );
+			tri->Color4f( 1, 1, 1, 1 );
+			tri->Begin( TRI_QUADS );
+				tri->TexCoord2f( 0, 0 );	tri->Vertex3fv( p[0] );
+				tri->TexCoord2f( 1, 0 );	tri->Vertex3fv( p[1] );
+				tri->TexCoord2f( 1, 1 );	tri->Vertex3fv( p[2] );
+				tri->TexCoord2f( 0, 1 );	tri->Vertex3fv( p[3] );
+			tri->End();
+		}
+
+		// The light: flickering, the same value through a 20 Hz frame
+		unsigned int seed = (unsigned int)( tick * 2654435761u + t->index * 40503u );
+		int b = 128 + (int)( ( seed >> 8 ) % 128 );
+		float radius = 200.0f * ( t->scale < 1.0f ? t->scale : 1.0f );
+		float light[3] = { t->origin[0], t->origin[1], t->origin[2] + ZL_DIST( 70.0f ) };
+
+		dlight_t *el = gEngfuncs.pEfxAPI->CL_AllocElight( 0x5B00 + t->index );
+		if ( el )
+		{
+			VectorCopy( light, el->origin );
+			el->radius = ZL_DIST( radius );
+			el->color.r = b;
+			el->color.g = b;
+			el->color.b = 0;
+			el->die = now + 0.1f;
+			el->decay = 0;
+		}
+
+		// The glow
+		if ( s_sprGlow && tri->SpriteTexture( s_sprGlow, 0 ) )
+		{
+			float half = 500.0f * radius * radius * 0.0000026f * ZL_UNIT;
+			float q[3];
+			// Alpha 50 over the scene: drawn as light added at that strength, the way a glow looks
+			tri->RenderMode( kRenderTransAdd );
+			tri->Color4f( b / 255.0f, b / 255.0f, 0.0f, 50.0f / 255.0f );
+			tri->Begin( TRI_QUADS );
+			static const float c[4][2] = { { -1, 1 }, { 1, 1 }, { 1, -1 }, { -1, -1 } };
+			for ( int k = 0; k < 4; k++ )
+			{
+				for ( int a = 0; a < 3; a++ )
+					q[a] = light[a] + right[a] * c[k][0] * half + up[a] * c[k][1] * half;
+				tri->TexCoord2f( c[k][0] < 0 ? 0 : 1, c[k][1] > 0 ? 0 : 1 );
+				tri->Vertex3fv( q );
+			}
+			tri->End();
+		}
+	}
+}
+
 void ZFx_Draw( void )
 {
 	triangleapi_t *tri = gEngfuncs.pTriAPI;
@@ -608,6 +739,8 @@ void ZFx_Draw( void )
 	}
 
 	ZFx_DrawMarks( now );
+	ZFx_DrawTorches( now );
+	ZCam_DrawDeathFade( s_sprWhite );
 
 	tri->RenderMode( kRenderNormal );
 	tri->Color4f( 1, 1, 1, 1 );
@@ -627,6 +760,8 @@ void ZFx_VidInit( void )
 	s_sprCharge[0] = ZDraw_LoadSprite( "sprites/zl_spincharge_b.spr" );
 	s_sprCharge[1] = ZDraw_LoadSprite( "sprites/zl_spincharge_o.spr" );
 	s_sprHitmark = ZDraw_LoadSprite( "sprites/zl_hitmark.spr" );
+	s_sprFlame = ZDraw_LoadSprite( "sprites/zl_flame.spr" );
+	s_sprGlow = ZDraw_LoadSprite( "sprites/zl_glow.spr" );
 
 	memset( s_links, 0, sizeof( s_links ) );
 	memset( s_marks, 0, sizeof( s_marks ) );

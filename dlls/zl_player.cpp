@@ -10,6 +10,7 @@
 #include "player.h"
 #include "weapons.h"
 #include "gamerules.h"
+#include "client.h"
 #include "talkmonster.h"
 #include "zl_player.h"
 
@@ -287,6 +288,8 @@ void CLinkPlayer::Spawn( void )
 	memset( m_iZButtonsSent, -1, sizeof( m_iZButtonsSent ) );
 	m_iZTargetSent = m_iZHoverSent = m_iZTargetFlagsSent = -1;
 	m_flZFallStartZ = pev->origin.z;
+	m_iZFallVoice = 0;
+	m_flZShockUntil = 0;
 	m_iZAnimState = -1;
 	m_iZLandAnim = 0;
 	m_iZLandNext = 0;
@@ -330,6 +333,8 @@ void CLinkPlayer::Spawn( void )
 	pev->vuser3.x = pev->vuser3.y = 0;	// the speed Link wants (PMZ_SpeedBegin): start from standing
 	pev->vuser3.z = pev->origin.z;		// fallStartHeight
 	m_flZTalkEndTime = -1.0f;
+	m_pszZNavi = NULL;
+	m_fZNaviCalling = FALSE;
 	m_flZPutAwayStart = 0;
 	m_flZPutAwayReady = 0;
 	m_fZWorldFrozen = FALSE;
@@ -392,11 +397,23 @@ void CLinkPlayer::ZUpdateServerFlags( void )
 	if ( ZItemAimable( m_ZInv.cButton[1] ) ) f |= ZSF_AIM_CDOWN;
 	if ( ZItemAimable( m_ZInv.cButton[2] ) ) f |= ZSF_AIM_CRIGHT;
 
-	if ( m_hZTalkTo != NULL || ZAction() == ZACT_TALK || ZAction() == ZACT_GETITEM || ZAction() == ZACT_CHEST || ( pev->flags & FL_FROZEN ) )
+	if ( m_hZTalkTo != NULL || ZAction() == ZACT_TALK || ZAction() == ZACT_GETITEM || ZAction() == ZACT_CHEST || ZAction() == ZACT_DOOR ||
+		 ( pev->flags & FL_FROZEN ) )
 		f |= ZSF_FROZEN;
 
 	if ( m_hZHookshot != NULL && ZAction() != ZACT_HOOKFLY )
 		f |= ZSF_HOOKSHOT;
+
+	// Interface_SetNaviCall: C-up comes up for Navi, and she says "Hey!" as it does
+	if ( m_pszZNavi && m_hZTalkTo == NULL )
+	{
+		f |= ZSF_NAVI;
+		if ( !m_fZNaviCalling )
+			ZL_EmitSound( edict(), CHAN_STATIC, ZS_NAVI_HEY, 1, ATTN_NORM, PITCH_NORM );
+		m_fZNaviCalling = TRUE;
+	}
+	else if ( m_hZTalkTo == NULL )
+		m_fZNaviCalling = FALSE;
 
 	pev->iuser3 = f;
 }
@@ -417,6 +434,21 @@ void CLinkPlayer::PreThink( void )
 
 	pev->button = ZTranslateHLButtons( raw );
 
+	if ( pev->deadflag >= DEAD_DYING )
+	{
+		// link_derth_rebirth (played at 1.5) hits the floor on its frame 60: NA_SE_PL_BOUND
+		if ( !m_fZDeathBound && gpGlobals->time - m_flZDeathTime >= ZL_FRAMES( 60.0f / ZL_ANIM_RATE ) )
+		{
+			m_fZDeathBound = TRUE;
+			ZSound( CHAN_BODY, ZS_PL_BOUND );
+		}
+
+		// Single player: the Game Over screen's "Continue playing?" decides (zl_continue), not
+		// Half-Life's press-any-button reload
+		if ( !g_pGameRules->IsMultiplayer() )
+			pev->button = 0;
+	}
+
 	CBasePlayer::PreThink();
 
 	if ( IsAlive() && !g_fGameOver )
@@ -427,6 +459,11 @@ void CLinkPlayer::PreThink( void )
 		// The A that closed a text box isn't a new press: wait until it has been let go
 		if ( ZPressed( ZPAD_A ) && gpGlobals->time - m_flZTalkEndTime > 0.3f )
 			ZDoActionPressed();
+
+		// C-up with Navi calling: her text (Player_ActionHandler_Talk, cUpTalkActor = naviActor)
+		if ( ZPressed( ZPAD_CUP ) && m_pszZNavi && m_hZTalkTo == NULL &&
+			 ( ZAction() == ZACT_STAND || ZAction() == ZACT_SHIELD ) )
+			ZStartMessage( m_pszZNavi, NULL, 0 );
 	}
 
 	ZUpdateServerFlags();
@@ -453,6 +490,10 @@ void CLinkPlayer::PostThink( void )
 
 	if ( !IsAlive() || g_fGameOver )
 		return;
+
+	// bodyShockTimer: sparks crackle over him while he's electrocuted
+	if ( ZAction() == ZACT_SHOCK && RANDOM_LONG( 0, 2 ) == 0 )
+		ZL_SendFx( ZFX_SPARKS, pev->origin + Vector( RANDOM_FLOAT( -10, 10 ), RANDOM_FLOAT( -10, 10 ), RANDOM_FLOAT( -24, 24 ) ) );
 
 	// CBasePlayer::PostThink only picks an animation standing, moving on the ground or in water:
 	// in the air (jumps, hops, falls) it's up to us
@@ -493,14 +534,15 @@ void CLinkPlayer::ZUpdateModel( void )
 	int act = ZAction();
 
 	// Swinging draws the sword; items, climbing and grabbing put it away (Player_PutAwayHeldItem),
-	// and so do talking, chests and item gets (Player_SetupWaitForPutAway)
+	// and so do talking, chests and item gets (Player_SetupWaitForPutAway) and opening a door with a
+	// handle (Player_ActionHandler_1)
 	if ( act == ZACT_SLASH || act == ZACT_JUMPSLASH || act == ZACT_JUMPSLASH_END || act == ZACT_SPIN_CHARGE || act == ZACT_SPIN )
 	{
 		m_fZSwordOut = TRUE;
 		m_flZPutAwayStart = 0;
 	}
 	else if ( act == ZACT_AIM || act == ZACT_CLIMB || act == ZACT_HOOKFLY || act == ZACT_TALK || act == ZACT_CHEST ||
-			  act == ZACT_GETITEM || m_hZHeldBomb != NULL || !( pev->iuser3 & ZSF_HASSWORD ) )
+			  act == ZACT_GETITEM || ( act == ZACT_DOOR && ZL_GetSub( pev->iuser4 ) != ZDOOR_SLIDING ) || m_hZHeldBomb != NULL || !( pev->iuser3 & ZSF_HASSWORD ) )
 	{
 		m_fZSwordOut = FALSE;
 		m_flZPutAwayStart = 0;
@@ -572,7 +614,7 @@ void CLinkPlayer::ZUpdateModel( void )
 			m_flZBlinkNext = gpGlobals->time + RANDOM_FLOAT( 1.0f, 4.0f );
 		}
 	}
-	if ( act == ZACT_DEAD || act == ZACT_KNOCKDOWN )
+	if ( act == ZACT_DEAD || act == ZACT_KNOCKDOWN || act == ZACT_SHOCK )
 		pev->skin = 2;
 }
 
@@ -600,7 +642,8 @@ void CLinkPlayer::SetAnimation( PLAYER_ANIM playerAnim )
 
 	if ( playerAnim == PLAYER_DIE )
 	{
-		CBasePlayer::SetAnimation( playerAnim );
+		// ZACT_DEAD's own (link_derth_rebirth); Half-Life's die sequences without link.mdl
+		ZAnimate();
 		return;
 	}
 
@@ -646,7 +689,17 @@ void CLinkPlayer::Killed( entvars_t *pevAttacker, int iGib )
 		m_hZTalkTo = NULL;
 
 		ZSetAction( ZACT_DEAD );
-		ZSound( CHAN_VOICE, ZS_VO_DEATH );
+		ZSound( CHAN_VOICE, ZS_VO_DEATH );		// NA_SE_VO_LI_DOWN
+		m_flZDeathTime = gpGlobals->time;
+		m_fZDeathBound = FALSE;
+
+		// Audio_StopBgmAndFanfare, Audio_PlayFanfare( NA_BGM_GAME_OVER ): just in single player,
+		// the music being everyone's in multiplayer
+		if ( !g_pGameRules->IsMultiplayer() )
+		{
+			ZL_MusicStop( 0 );
+			ZL_MusicPlay( "game_over", 0, 1.0f, 0 );
+		}
 
 		MESSAGE_BEGIN( MSG_ONE, gmsgZText, NULL, pev );
 			WRITE_BYTE( ZTEXT_CLOSE );
@@ -656,6 +709,27 @@ void CLinkPlayer::Killed( entvars_t *pevAttacker, int iGib )
 	}
 
 	CBasePlayer::Killed( pevAttacker, iGib );
+
+	if ( LinkActive() )
+	{
+		// No Half-Life death hop: he crumples where he stands (Player_DecelerateToZero)
+		if ( pev->velocity.z > 0 )
+			pev->velocity.z = 0;
+		pev->velocity.x *= 0.5f;
+		pev->velocity.y *= 0.5f;
+	}
+}
+
+// The Game Over screen's answer (KaleidoScope's PAUSE_STATE_GAME_OVER_CONTINUE_PROMPT): carry on
+// from the last save, or give up to the menu
+void CLinkPlayer::ZContinue( BOOL yes )
+{
+	if ( IsAlive() || g_pGameRules->IsMultiplayer() )
+		return;
+	if ( yes )
+		respawn( pev, FALSE );		// single player: "reload"
+	else
+		CLIENT_COMMAND( edict(), "disconnect\n" );
 }
 
 /*
@@ -777,6 +851,7 @@ void CLinkPlayer::ZUpdateDoAction( void )
 	Vector fwd = ZForward();
 
 	m_hZDoAction = NULL;
+	m_pszZNavi = NULL;
 
 	if ( m_hZHeldBomb != NULL )
 	{
@@ -802,6 +877,23 @@ void CLinkPlayer::ZUpdateDoAction( void )
 	{
 		if ( pEnt == this )
 			continue;
+
+		// Doors decide for themselves (EnDoor_Idle / DoorShutter_Idle: in front of it, facing it,
+		// no key wanted) and come first: Link is right up against them
+		if ( ZL_IsDoor( pEnt ) )
+		{
+			// Locked and no key: Navi tells him (naviTextId -0x203)
+			const char *navi = ZL_DoorNaviText( pEnt, this );
+			if ( navi )
+				m_pszZNavi = navi;
+			if ( ZL_DoorCanOpen( pEnt, this ) )
+			{
+				best = ZDO_OPEN;
+				pBest = pEnt;
+				bestDist = 0;
+			}
+			continue;
+		}
 
 		Vector delta = pEnt->Center() - pev->origin;
 		delta.z = 0;

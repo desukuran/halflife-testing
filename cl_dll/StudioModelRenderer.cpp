@@ -1254,6 +1254,13 @@ int CStudioModelRenderer::StudioDrawModel( int flags )
 
 	// Zelda: OoT's bomb is a disc that always faces the camera (EnBom_Draw: Matrix_ReplaceRotation
 	// with the billboard matrix). Its model's +X is the side that faces the viewer.
+	// Zelda: a lit standing torch, its flame drawn by zl_effects.cpp (renderamt = the flame's size)
+	if ( m_pRenderModel && ( flags & STUDIO_RENDER ) && strstr( m_pRenderModel->name, "zelda/torch_" ) && m_pCurrentEntity->curstate.renderamt > 0 )
+	{
+		extern void ZFx_TorchDrawn( int index, const float *origin, float yaw, float scale );
+		ZFx_TorchDrawn( m_pCurrentEntity->index, m_pCurrentEntity->origin, m_pCurrentEntity->angles[1], m_pCurrentEntity->curstate.renderamt / 255.0f );
+	}
+
 	if ( m_pRenderModel && strstr( m_pRenderModel->name, "zelda/bomb.mdl" ) )
 	{
 		// Held (playerclass = the holder): on the hands as they were drawn, 7 up (shape.yOffset),

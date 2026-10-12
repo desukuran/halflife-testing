@@ -108,6 +108,10 @@ extern struct model_s *g_zlSprTextbox;
 extern struct model_s *g_zlSprHudIcons;
 extern struct model_s *g_zlSprIcons;
 extern struct model_s *g_zlSprMagic;		// meter end, end rim, middle, middle rim, fill
+extern struct model_s *g_zlSprGameOver;		// zl_gameover.spr (rip_from_decomp.py rip_game_over)
+extern struct model_s *g_zlSprNavi;			// C-up's "Navi" label, frames 0 (outline) and 1
+extern struct model_s *g_zlSprDoAction;		// the A button's labels, frames 2 * ZDO_* (outline) and + 1
+extern struct model_s *g_zlSprAmmo;			// gAmmoDigit0-9Tex, frames 2 * digit (outline) and + 1
 
 // Frames in sprites/zl_icons.spr (tools/zelda/make_hud_sprites.py)
 enum zl_icon_e
@@ -151,6 +155,14 @@ float	ZCam_Letterbox( void );		// 0..32 in 240 line units
 int		ZCam_IsFirstPerson( void );
 float	ZCam_ViewPitch( void );
 int		ZCam_HookDot( float *pos );	// aiming the hookshot: where its red dot is
+int		ZCam_DoorHidesHud( void );	// the door camera (Camera_Special9) hides the HUD
+int		ZDeath_Active( void );		// dead: the death camera and Game Over (zl_camera.cpp)
+int		ZDeath_Multiplayer( void );
+float	ZDeath_Frames( void );		// OoT frames since he died
+int		ZDeath_Choice( void );		// "Continue playing?": 0 yes, 1 no
+int		ZDeath_Answered( void );
+void	ZDeath_Input( int pressed, float stickX );
+void	ZCam_DrawDeathFade( struct model_s *white );	// from ZFx_Draw
 
 // zl_input.cpp
 void	ZInput_Init( void );

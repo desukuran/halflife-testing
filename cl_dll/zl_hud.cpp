@@ -154,6 +154,7 @@ public:
 	int m_iLastHealth;
 };
 
+static cvar_t *zl_bow_crosshair;
 static CHudZelda g_HudZelda;
 
 // DECLARE_MESSAGE assumes a CHud member; this element is a global
@@ -188,6 +189,7 @@ int CHudZelda::Init( void )
 	HOOK_MESSAGE( ZMusic );
 	HOOK_MESSAGE( ZItemGet );
 
+	zl_bow_crosshair = CVAR_CREATE( "zl_bow_crosshair", "0", FCVAR_ARCHIVE );
 	zl_hud_gc = CVAR_CREATE( "zl_hud_gc", "0", FCVAR_ARCHIVE );		// GameCube button colours
 	zl_hud = CVAR_CREATE( "zl_hud", "1", FCVAR_ARCHIVE );
 	zl_hud_scale = CVAR_CREATE( "zl_hud_scale", "1", FCVAR_ARCHIVE );
@@ -609,7 +611,42 @@ static const char *s_doActionNames[ZDO_COUNT] =
 	"Throw", "Climb", "Drop", "Down", "Save", "Speak", "Next", "Grab", "Stop", "Put Away", "Reel",
 };
 
-// A (186, 9), B (160, 17) width 29, C left (227, 18) / down (249, 34) / right (271, 18) width 27
+// An IA texture drawn as lerp(black, colour, I) with its alpha: the outline frame dark, then
+// alpha x intensity in the colour (rip_two_layer)
+static void ZL_DrawTwoLayer( struct model_s *spr, int pair, float x, float y, float w, float h, int r, int g, int b, int a )
+{
+	ZDraw_Sprite( spr, pair * 2, x, y, w, h, 0, 0, 0, a );
+	ZDraw_Sprite( spr, pair * 2 + 1, x, y, w, h, r, g, b, a );
+}
+
+// Interface_DrawAmmoCount: gAmmoDigit textures, 8x8, the tens at x and the ones 6 to the right;
+// grey at none (and green when full, which isn't sent)
+static void ZL_DrawAmmo( int ammo, float vx, float vy )
+{
+	float s = ZDraw_Scale();
+	int c = ammo == 0 ? 100 : 255;
+	if ( !g_zlSprAmmo )
+	{
+		char buf[8];
+		snprintf( buf, sizeof( buf ), "%d", ammo );
+		ZDraw_TextShadow( buf, ZDraw_X( vx, ZA_RIGHT ), ZDraw_Y( vy - 2 ), 10 * s, c, c, c, 255 );
+		return;
+	}
+	if ( ammo > 99 )
+		ammo = 99;
+	if ( ammo >= 10 )
+		ZL_DrawTwoLayer( g_zlSprAmmo, ammo / 10, ZDraw_X( vx, ZA_RIGHT ), ZDraw_Y( vy ), 8 * s, 8 * s, c, c, c, 255 );
+	ZL_DrawTwoLayer( g_zlSprAmmo, ammo % 10, ZDraw_X( vx + 6, ZA_RIGHT ), ZDraw_Y( vy ), 8 * s, 8 * s, c, c, c, 255 );
+}
+
+/*
+ Interface_DrawItemButtons / Interface_DrawActionButton: gButtonBackgroundTex in the button's
+ colour (its own alpha makes it see through), B (160, 17) 29 wide, C left (227, 18) / down
+ (249, 34) / right (271, 18) 27 wide; item icons 30 / 24 wide from the button's corner; empty C
+ buttons show their arrow textures; the A button (186, 9) with its do_action_static label, 48 x 16
+ against the button's 28. C-up only comes up when Navi calls: (254, 16) 16 wide with "Navi" (32 x 8)
+ 7 left of it and 4 down, blinking every 10 frames (sCUpTimer).
+*/
 void CHudZelda::DrawButtons( float time )
 {
 	float s = ZDraw_Scale();
@@ -621,20 +658,19 @@ void CHudZelda::DrawButtons( float time )
 
 	// B: the sword
 	{
-		float d = 29 * s;
 		float x = ZDraw_X( 160, ZA_RIGHT ), y = ZDraw_Y( 17 );
-		ZDraw_Sprite( g_zlSprButton, 0, x, y, d, d, bR, bG, bB, 200 );
+		ZDraw_Sprite( g_zlSprButton, 0, x, y, 29 * s, 29 * s, bR, bG, bB, 255 );
 		if ( g_zl.swordB )
 		{
 			int icon = g_zl.swordB == 3 ? ZICON_SWORD_BIGGORON : g_zl.swordB == 2 ? ZICON_SWORD_MASTER : ZICON_SWORD_KOKIRI;
-			int alpha = ( g_zl.holding || act == ZACT_AIM || act == ZACT_TALK ) ? 80 : 255;
-			ZDraw_Sprite( g_zlSprIcons, icon, x + 2 * s, y + 2 * s, d - 4 * s, d - 4 * s, 255, 255, 255, alpha );
+			int alpha = ( g_zl.holding || act == ZACT_AIM || act == ZACT_TALK ) ? 70 : 255;
+			ZDraw_Sprite( g_zlSprIcons, icon, x, y, 30 * s, 30 * s, 255, 255, 255, alpha );
 		}
 	}
 
 	// A: do-action label
 	{
-		float d = 29 * s;
+		float d = 28 * s;
 		float x = ZDraw_X( 186, ZA_RIGHT ), y = ZDraw_Y( 9 );
 		int doAction = g_zl.doAction;
 
@@ -674,21 +710,29 @@ void CHudZelda::DrawButtons( float time )
 		float squash = fabsf( cosf( angle ) );
 		float dy = d * squash;
 
-		ZDraw_Sprite( g_zlSprButton, 0, x, y + ( d - dy ) * 0.5f, d, dy, aR, aG, aB, shown ? 220 : 120 );
+		ZDraw_Sprite( g_zlSprButton, 0, x, y + ( d - dy ) * 0.5f, d, dy, aR, aG, aB, 255 );
 
-		const char *label = ( shown > 0 && shown < ZDO_COUNT ) ? s_doActionNames[shown] : "";
-		if ( label[0] && squash > 0.05f )
+		if ( shown > 0 && shown < ZDO_COUNT && squash > 0.05f )
 		{
-			float h = 11 * s;
-			float w = ZDraw_TextWidth( label, h );
-			if ( w > d * 1.3f )
+			if ( g_zlSprDoAction && g_zlSprDoAction->numframes >= ZDO_COUNT * 2 )
 			{
-				h *= d * 1.3f / w;
-				w = ZDraw_TextWidth( label, h );
+				float lw = d * 48.0f / 28.0f, lh = d * 16.0f / 28.0f * squash;
+				ZL_DrawTwoLayer( g_zlSprDoAction, shown, x + ( d - lw ) * 0.5f, y + ( d - lh ) * 0.5f, lw, lh, 255, 255, 255, 255 );
 			}
-			ZDraw_SetTextYScale( squash );
-			ZDraw_TextShadow( label, x + ( d - w ) * 0.5f, y + d * 0.5f - h * 0.55f, h, 255, 255, 255, 255 );
-			ZDraw_SetTextYScale( 1.0f );
+			else
+			{
+				const char *label = s_doActionNames[shown];
+				float h = 11 * s;
+				float w = ZDraw_TextWidth( label, h );
+				if ( w > d * 1.3f )
+				{
+					h *= d * 1.3f / w;
+					w = ZDraw_TextWidth( label, h );
+				}
+				ZDraw_SetTextYScale( squash );
+				ZDraw_TextShadow( label, x + ( d - w ) * 0.5f, y + d * 0.5f - h * 0.55f, h, 255, 255, 255, 255 );
+				ZDraw_SetTextYScale( 1.0f );
+			}
 		}
 	}
 
@@ -702,32 +746,43 @@ void CHudZelda::DrawButtons( float time )
 		float d = 27 * s;
 		float x = ZDraw_X( cx[i], ZA_RIGHT ), y = ZDraw_Y( cy[i] );
 
-		ZDraw_Sprite( g_zlSprButton, 0, x, y, d, d, 255, 160, 0, 170 );
+		ZDraw_Sprite( g_zlSprButton, 0, x, y, d, d, 255, 160, 0, 255 );
 
 		if ( g_zl.cItem[i] == ZITEM_NONE )
 		{
-			ZDraw_SpriteRotated( g_zlSprButton, 2, x + d * 0.5f, y + d * 0.5f, d * 0.5f, d * 0.5f, arrowDeg[i], 120, 70, 0, 220 );
+			if ( g_zlSprButton && g_zlSprButton->numframes >= 6 )
+				ZDraw_Sprite( g_zlSprButton, 3 + i, x, y, d, d, 255, 160, 0, 255 );
+			else
+				ZDraw_SpriteRotated( g_zlSprButton, 2, x + d * 0.5f, y + d * 0.5f, d * 0.5f, d * 0.5f, arrowDeg[i], 120, 70, 0, 220 );
 			continue;
 		}
 
-		int alpha = ( act == ZACT_TALK || act == ZACT_DEAD ) ? 90 : 255;
-		DrawItemIcon( g_zl.cItem[i], g_zl.cWeapon[i], x + d * 0.5f, y + d * 0.5f, d * 0.85f, alpha );
+		int alpha = ( act == ZACT_TALK || act == ZACT_DEAD ) ? 70 : 255;
+		DrawItemIcon( g_zl.cItem[i], g_zl.cWeapon[i], x + 12 * s, y + 12 * s, 24 * s, alpha );
 
 		if ( g_zl.cAmmo[i] >= 0 )
-		{
-			int r = 255, g = 255, b = 255;
-			if ( g_zl.cAmmo[i] == 0 )
-				r = g = b = 130;
-			DrawCount( g_zl.cAmmo[i], x + d + 1 * s, y + d + 1 * s, 10 * s, r, g, b );
-		}
+			ZL_DrawAmmo( g_zl.cAmmo[i], cx[i] + 1, cy[i] + 17 );
 	}
 
-	// C-up: first person view (C_UP_BUTTON 254, 16), small
+	// C-up: Navi calling
+	static float naviStart = -1.0f;
+	if ( !( ZL_PredictedFlags() & ZSF_NAVI ) || ZText_IsOpen() )
 	{
-		float d = 12 * s;
-		float x = ZDraw_X( 254, ZA_RIGHT ), y = ZDraw_Y( 4 );
-		ZDraw_Sprite( g_zlSprButton, 0, x, y, d, d, 255, 160, 0, 170 );
-		ZDraw_SpriteRotated( g_zlSprButton, 2, x + d * 0.5f, y + d * 0.5f, d * 0.6f, d * 0.6f, 0, 120, 70, 0, 230 );
+		naviStart = -1.0f;
+		return;
+	}
+	if ( naviStart < 0 || naviStart > time )
+		naviStart = time;
+	if ( (int)( ( time - naviStart ) * ZL_FPS / 10.0f ) & 1 )
+		return;		// sCUpInvisible
+	{
+		float d = 16 * s;
+		ZDraw_Sprite( g_zlSprButton, 0, ZDraw_X( 254, ZA_RIGHT ), ZDraw_Y( 16 ), d, d, 255, 160, 0, 255 );
+		float lx = ZDraw_X( 254 - 7, ZA_RIGHT ), ly = ZDraw_Y( 16 + 4 );
+		if ( g_zlSprNavi )
+			ZL_DrawTwoLayer( g_zlSprNavi, 0, lx, ly, 32 * s, 8 * s, 255, 255, 255, 255 );
+		else
+			ZDraw_TextShadow( "Navi", lx, ly - 2 * s, 8 * s, 255, 255, 255, 255 );
 	}
 }
 
@@ -840,6 +895,10 @@ void CHudZelda::DrawAimCrosshair( void )
 		return;
 	}
 
+	// OoT has no crosshair for the bow: you aim along the arrow. zl_bow_crosshair 1 adds one.
+	if ( !zl_bow_crosshair || !zl_bow_crosshair->value )
+		return;
+
 	float s = ZDraw_Scale();
 	float cx = ScreenWidth * 0.5f, cy = ScreenHeight * 0.5f;
 	ZDraw_Rect( cx - 6 * s, cy - 0.5f * s, 4 * s, 1 * s, 255, 255, 255, 220 );
@@ -860,6 +919,67 @@ void CHudZelda::DrawItemGet( float time )
 	ZDraw_Sprite( g_zlSprIcons, g_zl.itemGetIcon, ScreenWidth * 0.5f - size * 0.5f, ZDraw_Y( 80 ) + bob, size, size, 255, 255, 255, 255 );
 }
 
+/*
+ KaleidoScope_DrawGameOver and the continue prompt (single player). From when link_derth_rebirth
+ stops (frame 56) and 20 more (GAMEOVER_DEATH_DELAY_MENU): "GAME OVER" at (64, 98), its colours
+ coming round over 30 frames (PRIMITIVE 255,130,0 alpha 0 -> 30,0,0 alpha 255, ENVIRONMENT the
+ other way), the shine scrolling half a row a frame; 40 frames on it rises 3 a frame to 66 and
+ "Continue playing?" comes up with Yes / No. Multiplayer: a line saying how to respawn.
+*/
+static void ZL_DrawGameOver( float time )
+{
+	float f = ZDeath_Frames();
+	float s = ZDraw_Scale();
+	const float start = 56.0f + 20.0f;
+
+	if ( ZDeath_Multiplayer() )
+	{
+		if ( f >= start )
+		{
+			const char *msg = "Press A to respawn";
+			float h = 10 * s;
+			ZDraw_TextShadow( msg, ScreenWidth * 0.5f - strlen( msg ) * h * 0.28f, ZDraw_Y( 200 ), h, 255, 255, 255, 255 );
+		}
+		return;
+	}
+
+	if ( f < start || !g_zlSprGameOver || g_zlSprGameOver->numframes < 8 )
+		return;
+
+	float k = min( 1.0f, ( f - start ) / 30.0f );
+	int pr = (int)( 255 + ( 30 - 255 ) * k ), pg = (int)( 130 - 130 * k ), pa = (int)( 255 * k );
+	int er = (int)( 30 + ( 255 - 30 ) * k ), eg = (int)( 130 * k );
+
+	float rise = f - ( start + 30.0f + 40.0f );
+	float ty = 98.0f - ( rise > 0 ? min( 32.0f, rise * 3.0f ) : 0.0f );
+	float tx = ZDraw_X( 64, ZA_CENTER ), y = ZDraw_Y( ty );
+	float w = 192 * s, h = 32 * s;
+
+	ZDraw_Sprite( g_zlSprGameOver, 0, tx, y, w, h, pr, pg, 0, pa );
+	ZDraw_Sprite( g_zlSprGameOver, 1, tx, y, w, h, er, eg, 0, pa );
+	if ( g_zlSprGameOver->numframes >= 40 )
+	{
+		int shift = ( (int)( f * 0.5f ) ) % 32;
+		ZDraw_Sprite( g_zlSprGameOver, 8 + ( 32 - shift ) % 32, tx, y, w, h, er, eg, 0, pa );
+	}
+
+	// The prompt
+	if ( rise <= 0 )
+		return;
+	int a = (int)( 255 * min( 1.0f, rise / 11.0f ) );
+	ZL_DrawTwoLayer( g_zlSprGameOver, 1, ZDraw_X( 84, ZA_CENTER ), ZDraw_Y( 128 ), 152 * s, 16 * s, 255, 255, 255, a );
+
+	// The chosen one in the cursor's yellow, pulsing (sPromptChoice), the other white
+	float pulse = 0.75f + 0.25f * sinf( time * 6.0f );
+	for ( int i = 0; i < 2; i++ )
+	{
+		bool sel = ZDeath_Choice() == i;
+		int r = 255, g = sel ? (int)( 255 * pulse ) : 255, b = sel ? 0 : 255;
+		int ia = sel ? a : a * 2 / 3;
+		ZL_DrawTwoLayer( g_zlSprGameOver, 2 + i, ZDraw_X( i ? 176 : 96, ZA_CENTER ), ZDraw_Y( 150 ), 48 * s, 16 * s, r, g, b, ia );
+	}
+}
+
 int CHudZelda::Draw( float flTime )
 {
 	ZMusic_Frame( flTime );
@@ -874,8 +994,23 @@ int CHudZelda::Draw( float flTime )
 
 	DrawLetterbox();
 
+	// Dead: no HUD (CAM_HUD_VISIBILITY_NOTHING_ALT), then the Game Over screen
+	if ( ZDeath_Active() )
+	{
+		ZL_DrawGameOver( flTime );
+		ZDraw_End();
+		return 1;
+	}
+
 	bool talking = ZText_IsOpen();
 	int act = ZL_PredictedAction();
+
+	// CAM_HUD_VISIBILITY_NOTHING_ALT while the door camera runs
+	if ( ZCam_DoorHidesHud() )
+	{
+		ZDraw_End();
+		return 1;
+	}
 
 	DrawReticles( flTime );
 	DrawAimCrosshair();

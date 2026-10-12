@@ -61,13 +61,35 @@ enum zl_anim_e
 	ZANIM_AIM_BOW,
 	ZANIM_AIM_HOOK,
 	ZANIM_HOOKFLY,
-	ZANIM_DAMAGE,
-	ZANIM_KNOCKDOWN,
+	ZANIM_DAMAGE,			// D_808544B0: hit from in front, small (_shit) / big (_hit), _R locked on
+	ZANIM_KNOCKDOWN,		// front_downA
+	ZANIM_DAMAGE_R,
+	ZANIM_DAMAGE_BACK,
+	ZANIM_DAMAGE_BACK_R,
+	ZANIM_HIT,
+	ZANIM_HIT_R,
+	ZANIM_HIT_BACK,
+	ZANIM_HIT_BACK_R,
+	ZANIM_KNOCKDOWN_BACK,	// back_downA
+	ZANIM_DOWN,				// front_downB / back_downB: hitting the ground
+	ZANIM_DOWN_BACK,
+	ZANIM_WAKE,				// getting up
+	ZANIM_WAKE_BACK,
+	ZANIM_DAMAGE_RUN,		// PLAYER_KNOCKBACK_SMALL's hop (PLAYER_ANIMGROUP_damage_run, held on frame 0)
+	ZANIM_DAMAGE_RUN_FREE,
+	ZANIM_SHOCK,			// electrocuted
+	ZANIM_SHOCK_END,		// shaking it off as he stands (bodyShockTimer)
+	ZANIM_LAND_STUN,		// fall damage: link_normal_landing to frame 8, held (zl_landing_stun)
+	ZANIM_LAND_STUN_FREE,
+	ZANIM_DEATH,			// func_80836448: link_derth_rebirth to frame 84 (zl_death)
+	ZANIM_DEATH_SHOCK,		// ... electric_shock_end when it was a shock that killed him
 	ZANIM_TALK,
 	ZANIM_TALK_WAIT,
 	ZANIM_GETITEM,
 	ZANIM_GETITEM_B,
 	ZANIM_CHEST,
+	ZANIM_DOOR_A,			// through a door from behind it / in front (PLAYER_ANIMGROUP_doorA / doorB)
+	ZANIM_DOOR_B,
 	ZANIM_HOP_LAND_L,		// landing out of a hop, D_80853D4C[dir][1] / [2] (locked onto an enemy)
 	ZANIM_HOP_LAND_L_LOCK,
 	ZANIM_HOP_LAND_R,
@@ -116,6 +138,8 @@ enum zl_anim_e
 	ZANIM_SHORT_LANDING_FREE,
 	ZANIM_ROLL_FREE,
 	ZANIM_BONK_FREE,
+	ZANIM_DOOR_A_FREE,
+	ZANIM_DOOR_B_FREE,
 	ZANIM_FIDGET_LOOK,		// sFidgetAnimations: sword and shield in hand / otherwise (_F)
 	ZANIM_FIDGET_LOOK_F,
 	ZANIM_FIDGET_COLD,
@@ -194,6 +218,27 @@ static const zl_anim_def_t sAnims[ZANIM_COUNT] =
 	{ "gPlayerAnim_link_hook_fly_wait",				{ "link_hook_fly_wait", "longjump", "jump" },			ZGAIT_NONE, TRUE, ZRATE_ONCE },
 	{ "gPlayerAnim_link_normal_front_shit",			{ "link_normal_front_shit", "ref_aim_crowbar" },		"crouch_idle", FALSE },
 	{ "gPlayerAnim_link_normal_front_downA",		{ "link_normal_front_downA", "die_backwards1", "die_backwards" }, ZGAIT_NONE, FALSE },
+	{ "gPlayerAnim_link_normal_front_shitR",		{ "link_normal_front_shitR", "ref_aim_crowbar" },		"crouch_idle", FALSE },
+	{ "gPlayerAnim_link_normal_back_shit",			{ "link_normal_back_shit", "ref_aim_crowbar" },			"crouch_idle", FALSE },
+	{ "gPlayerAnim_link_normal_back_shitR",			{ "link_normal_back_shitR", "ref_aim_crowbar" },		"crouch_idle", FALSE },
+	{ "gPlayerAnim_link_normal_front_hit",			{ "link_normal_front_hit", "ref_aim_crowbar" },			"crouch_idle", FALSE },
+	{ "gPlayerAnim_link_anchor_front_hitR",			{ "link_anchor_front_hitR", "ref_aim_crowbar" },		"crouch_idle", FALSE },
+	{ "gPlayerAnim_link_normal_back_hit",			{ "link_normal_back_hit", "ref_aim_crowbar" },			"crouch_idle", FALSE },
+	{ "gPlayerAnim_link_anchor_back_hitR",			{ "link_anchor_back_hitR", "ref_aim_crowbar" },			"crouch_idle", FALSE },
+	{ "gPlayerAnim_link_normal_back_downA",			{ "link_normal_back_downA", "die_forwards", "die_backwards" }, ZGAIT_NONE, FALSE },
+	{ "gPlayerAnim_link_normal_front_downB",		{ "link_normal_front_downB", "die_backwards1", "die_backwards" }, ZGAIT_NONE, FALSE },
+	{ "gPlayerAnim_link_normal_back_downB",			{ "link_normal_back_downB", "die_forwards", "die_backwards" }, ZGAIT_NONE, FALSE },
+	{ "gPlayerAnim_link_normal_front_down_wake",	{ "link_normal_front_down_wake", "crouch_idle" },		ZGAIT_NONE, FALSE },
+	{ "gPlayerAnim_link_normal_back_down_wake",		{ "link_normal_back_down_wake", "crouch_idle" },		ZGAIT_NONE, FALSE },
+	{ "gPlayerAnim_link_fighter_damage_run",		{ "link_fighter_damage_run", "jump" },					ZGAIT_NONE, FALSE, ZRATE_HOLD },
+	{ "gPlayerAnim_link_normal_damage_run_free",	{ "link_normal_damage_run_free", "jump" },				ZGAIT_NONE, FALSE, ZRATE_HOLD },
+	{ "gPlayerAnim_link_normal_electric_shock",		{ "link_normal_electric_shock", "ref_aim_crowbar" },	"crouch_idle", TRUE },
+	{ "gPlayerAnim_link_normal_electric_shock_end",	{ "link_normal_electric_shock_end", "deep_idle" },		ZGAIT_NONE, FALSE },
+	{ "gPlayerAnim_link_normal_landing",			{ "zl_landing_stun", "crouch_idle" },					ZGAIT_NONE, FALSE },
+	{ "gPlayerAnim_link_normal_landing_free",		{ "zl_landing_stun_free", "crouch_idle" },				ZGAIT_NONE, FALSE },
+	// Dying (func_80836448, Player_AnimPlayOnce)
+	{ "gPlayerAnim_link_derth_rebirth",				{ "zl_death", "die_backwards1", "die_backwards" },		ZGAIT_NONE, FALSE, ZRATE_ONCE },
+	{ "gPlayerAnim_link_normal_electric_shock_end",	{ "link_normal_electric_shock_end", "die_backwards1", "die_backwards" }, ZGAIT_NONE, FALSE, ZRATE_ONCE },
 	// Player_Action_Talk: talk_free once (hand to his side), then talk_free_wait loops (breathing)
 	{ "gPlayerAnim_link_normal_talk_free",			{ "link_normal_talk_free", "ref_aim_crowbar" },			"deep_idle", FALSE },
 	{ "gPlayerAnim_link_normal_talk_free_wait",		{ "link_normal_talk_free_wait", "ref_aim_crowbar" },	"deep_idle", TRUE },
@@ -203,6 +248,10 @@ static const zl_anim_def_t sAnims[ZANIM_COUNT] =
 	{ "gPlayerAnim_link_demo_get_itemB",			{ "link_demo_get_itemB", "ref_aim_squeak", "ref_aim_trip" }, "deep_idle", FALSE },
 	// Opening a chest (ageProperties->unk_98)
 	{ "gPlayerAnim_link_demo_Tbox_open",			{ "link_demo_Tbox_open", "ref_aim_crowbar" },			"crouch_idle", FALSE },
+	// Opening a door (Player_ActionHandler_1, func_8083328C: playSpeed 1). They keep their sideways
+	// root (make_link_model.py); pm_zelda moves him forward with it.
+	{ "gPlayerAnim_link_demo_doorA_link",			{ "link_demo_doorA_link", "ref_aim_crowbar" },			ZGAIT_AUTO, FALSE, ZRATE_ONCE },
+	{ "gPlayerAnim_link_demo_doorB_link",			{ "link_demo_doorB_link", "ref_aim_crowbar" },			ZGAIT_AUTO, FALSE, ZRATE_ONCE },
 	// Hop landings (D_80853D4C): the backflip finishes its turn in backturn_jump_end
 	{ "gPlayerAnim_link_fighter_Lside_jump_end",	{ "link_fighter_Lside_jump_end", "crouch_idle" },		ZGAIT_NONE, FALSE, ZRATE_ONCE },
 	{ "gPlayerAnim_link_fighter_Lside_jump_endL",	{ "link_fighter_Lside_jump_endL", "crouch_idle" },		ZGAIT_NONE, FALSE, ZRATE_ONCE },
@@ -262,6 +311,8 @@ static const zl_anim_def_t sAnims[ZANIM_COUNT] =
 	{ "gPlayerAnim_link_normal_short_landing_free",	{ "link_normal_short_landing_free", "crouch_idle" },	ZGAIT_NONE, FALSE, ZRATE_ONCE },
 	{ "gPlayerAnim_link_normal_landing_roll_free",	{ "link_normal_landing_roll_free", "longjump", "jump" },	ZGAIT_NONE, FALSE, ZL_ROLL_RATE },
 	{ "gPlayerAnim_link_normal_hip_down_free",		{ "link_normal_hip_down_free", "die_backwards1", "die_backwards" }, ZGAIT_NONE, FALSE, ZRATE_ONCE },
+	{ "gPlayerAnim_link_demo_doorA_link_free",		{ "link_demo_doorA_link_free", "ref_aim_crowbar" },		ZGAIT_AUTO, FALSE, ZRATE_ONCE },
+	{ "gPlayerAnim_link_demo_doorB_link_free",		{ "link_demo_doorB_link_free", "ref_aim_crowbar" },		ZGAIT_AUTO, FALSE, ZRATE_ONCE },
 	// Idle fidgets (sFidgetAnimations), played once at PLAYER_ANIM_ADJUSTED_SPEED
 	{ "gPlayerAnim_link_normal_wait_typeA_20f",		{ "link_normal_wait_typeA_20f", "deep_idle" },			ZGAIT_NONE, FALSE },
 	{ "gPlayerAnim_link_normal_waitF_typeA_20f",	{ "link_normal_waitF_typeA_20f", "deep_idle" },			ZGAIT_NONE, FALSE },
@@ -410,6 +461,10 @@ static int ZL_Typed( CLinkPlayer *pLink, int anim )
 	case ZANIM_SHORT_LANDING:	return ZANIM_SHORT_LANDING_FREE;
 	case ZANIM_ROLL:			return ZANIM_ROLL_FREE;
 	case ZANIM_BONK:			return ZANIM_BONK_FREE;
+	case ZANIM_DOOR_A:			return ZANIM_DOOR_A_FREE;
+	case ZANIM_DAMAGE_RUN:		return ZANIM_DAMAGE_RUN_FREE;
+	case ZANIM_LAND_STUN:		return ZANIM_LAND_STUN_FREE;
+	case ZANIM_DOOR_B:			return ZANIM_DOOR_B_FREE;
 	}
 	return anim;
 }
@@ -569,7 +624,7 @@ static int ZL_PickAnimBase( CLinkPlayer *pLink )
 		// frame of landing (fallDistance > 0)
 		if ( pLink->pev->velocity.z < 0 && pLink->pev->origin.z < pLink->m_flZAirStart - 1.0f )
 			return ZANIM_FALL;
-		return ZL_GetSub( state ) == ZJUMP_NORMAL ? ZANIM_JUMP_NORMAL : ZANIM_JUMP;
+		return ZL_GetSub( state ) == ZJUMP_RUN ? ZANIM_JUMP : ZANIM_JUMP_NORMAL;
 	case ZACT_FALL:			return ZANIM_FALL;
 	case ZACT_LAND:
 	{
@@ -588,8 +643,33 @@ static int ZL_PickAnimBase( CLinkPlayer *pLink )
 	case ZACT_SPIN_CHARGE:	return speed > 10 ? ZANIM_SPIN_CHARGE_WALK : ZANIM_SPIN_CHARGE;
 	case ZACT_SHIELD:		return ZANIM_SHIELD;
 	case ZACT_HOOKFLY:		return ZANIM_HOOKFLY;
-	case ZACT_DAMAGE:		return ZANIM_DAMAGE;
-	case ZACT_KNOCKDOWN:	return ZANIM_KNOCKDOWN;
+	case ZACT_DAMAGE:
+	{
+		// D_808544B0[ big * 4 + back * 2 + locked ]
+		static const int sHits[8] =
+		{
+			ZANIM_DAMAGE, ZANIM_DAMAGE_R, ZANIM_DAMAGE_BACK, ZANIM_DAMAGE_BACK_R,
+			ZANIM_HIT, ZANIM_HIT_R, ZANIM_HIT_BACK, ZANIM_HIT_BACK_R,
+		};
+		return sHits[( mwa ? 4 : 0 ) + ( ZL_GetSub( state ) & 3 )];
+	}
+	case ZACT_KNOCKDOWN:
+	{
+		int sub = ZL_GetSub( state );
+		BOOL back = ( sub & ZKD_BACK ) != 0;
+		if ( sub & ZKD_SMALL )
+			return ZANIM_DAMAGE_RUN;
+		if ( mwa == ZKD_PHASE_DOWN )
+			return back ? ZANIM_DOWN_BACK : ZANIM_DOWN;
+		if ( mwa == ZKD_PHASE_WAKE )
+			return back ? ZANIM_WAKE_BACK : ZANIM_WAKE;
+		return back ? ZANIM_KNOCKDOWN_BACK : ZANIM_KNOCKDOWN;
+	}
+	case ZACT_SHOCK:		return ZANIM_SHOCK;
+	case ZACT_DEAD:
+		// bodyShockTimer still going: electric_shock_end
+		return pLink->m_flZShockUntil > gpGlobals->time ? ZANIM_DEATH_SHOCK : ZANIM_DEATH;
+	case ZACT_FALLSTUN:		return ZANIM_LAND_STUN;
 	case ZACT_TALK:
 		// talk_free plays once, then its wait loop takes over
 		if ( pLink->m_iZAnim == ZANIM_TALK_WAIT || ( pLink->m_iZAnim == ZANIM_TALK && pLink->m_fSequenceFinished ) )
@@ -597,6 +677,16 @@ static int ZL_PickAnimBase( CLinkPlayer *pLink )
 		return ZANIM_TALK;
 	case ZACT_GETITEM:		return ZL_GetSub( state ) == 1 ? ZANIM_GETITEM : ZANIM_GETITEM_B;
 	case ZACT_CHEST:		return ZANIM_CHEST;
+	case ZACT_DOOR:
+		// Walking in under a sliding door is just walking, and waiting for the key to turn
+		// (doorTimer) is standing (Player_GetIdleAnim)
+		if ( pLink->ZActionTime() < ZL_DoorWait( state ) )
+			break;
+		if ( ZL_GetSub( state ) == ZDOOR_HINGED_L )
+			return ZANIM_DOOR_A;
+		if ( ZL_GetSub( state ) == ZDOOR_HINGED_R )
+			return ZANIM_DOOR_B;
+		break;
 
 	case ZACT_AIM:
 	{
@@ -732,6 +822,13 @@ void CLinkPlayer::ZAnimate( void )
 		else
 			m_iZLandAnim = ZL_Typed( this, ZANIM_LAND );
 	}
+	else if ( act == ZACT_STAND && prevAct == ZACT_SHOCK )
+	{
+		// bodyShockTimer still going as he stands: Player_GetIdleAnim gives electric_shock_end,
+		// until it ends or he moves off
+		m_iZLandAnim = ZANIM_SHOCK_END;
+		m_iZLandNext = 0;
+	}
 	else if ( act == ZACT_STAND && prevAct == ZACT_ROLL && ( m_iZAnim == ZANIM_ROLL || m_iZAnim == ZANIM_ROLL_FREE ) )
 	{
 		// Player_Action_Roll hands over to standing on frame 20 of 32; the rest plays out unless
@@ -827,10 +924,13 @@ void CLinkPlayer::ZAnimate( void )
 			case ZACT_ROLL:		t = ZL_ROLL_TIME; break;
 			case ZACT_SPIN:		t = ZL_SpinTime( ZL_GetMWA( pev->iuser4 ) ); break;
 			case ZACT_LAND:		t = ZL_LAND_TIME * 2; break;
-			case ZACT_DAMAGE:	t = ZL_DAMAGE_TIME; break;
+			case ZACT_DAMAGE:	t = ZL_GetMWA( pev->iuser4 ) ? ZL_DAMAGE_BIG_TIME : ZL_DAMAGE_TIME; break;
 			case ZACT_KNOCKDOWN: t = ZL_KNOCKDOWN_TIME * 0.6f; break;
+			case ZACT_SHOCK:	t = ZL_SHOCK_TIME; break;
+			case ZACT_FALLSTUN:	t = ZL_FALLSTUN_TIME( ZL_GetSub( pev->iuser4 ) ); break;
 			case ZACT_CLIMB:	t = ZL_ClimbTime( ZL_GetSub( pev->iuser4 ) ); break;
 			case ZACT_CHEST:	t = ZL_CHEST_TIME; break;
+			case ZACT_DOOR:		t = ZL_DOOR_TIME; break;
 			}
 
 			if ( t > 0 )

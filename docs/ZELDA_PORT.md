@@ -118,6 +118,9 @@ Equip items with `zl_equip <0|1|2> <item number>` (C-left, C-down, C-right; item
 | `item_zl_heartcontainer`, `item_zl_key`, `item_zl_bow`, `item_zl_bombbag`, `item_zl_hookshot`, `item_zl_longshot`, `item_zl_mastersword`, `item_zl_hylianshield`, `item_zl_magicmeter`, `item_zl_doubledefense` | Item_Give + the GI_* text | Each plays the item get pose, a fanfare and a text box. |
 | `zl_chest` | EnBox | Opened with A. The `item` key picks the contents; the angle is the way the latch faces; spawnflag 1 makes a small chest. With `treasure_chest.mdl` (from `make_object_models.py`) it is OoT's slow chest: Link steps up and plays `link_demo_Tbox_open`, the lid opens at 1.5x with the latch click (frame 30) and creak (frame 90), the light comes out, and the camera is `Camera_Demo3`. Then he holds the item up (`link_demo_get_itemA`). Without the model it is a weapon box that pops open. |
 | `zl_sign`, `func_zl_sign` | EnKanban | Read with A (Check). |
+| `zl_torch` | Obj_Syokudai | A standing torch. `type` 0 golden, 1 timed, 2 wooden; spawnflag 1 starts it out; triggering lights it (the flame grows over 10 frames, `NA_SE_EV_FLAME_IGNITION`) or puts it out. Lit, it crackles (`NA_SE_EV_TORCH`), and the client draws OoT's flame (two scrolling fire textures, baked into `zl_flame.spr`), a flickering yellow light 70 up over 200 (lighting models, as OoT's point lights only light actors) and the light's halo (`Lights_DrawGlow`, added over the scene at alpha 50). Stands from `make_object_models.py` (`torch_*.mdl`). |
+| `zl_door` | En_Door | A door with a handle. Face it within 20 of its middle and 50 of it, press A ("Open"): Link is put 22 from it facing through, puts his sword away and plays `link_demo_doorA` (from behind it) or `doorB` (from in front), whose root carries him through (`pm_zelda.c` moves him forward along it; the sideways part stays in the animation so his hull goes through the middle of the doorway). The door swings on `gDoorAdultOpeningLeft/RightAnim` at 1.5 (`NA_SE_OC_DOOR_OPEN` on its frame 25, `NA_SE_EV_DOOR_CLOSE` on 60) and is solid again once shut. The camera is `Camera_Special9`: it holds for 38 frames, cuts to 200 out on the far side (20° up, 15° to one side), follows him through for 26, then swings in behind him and stays until he moves. Letterboxed, no HUD. Spawnflag 1: locked. It's chained up with a padlock on both faces (`Actor_DrawDoorLock`, `door_chains.mdl` / `door_lock.mdl`). Facing it without a small key, Navi calls ("Hey!", C-up blinks "Navi") and C-up shows her text (0x0203, a stand-in until your ROM's text is ripped). With a key, A uses it (`NA_SE_EV_CHAIN_KEY_UNLOCK`): the chains slide off and the padlock shrinks away over 10 frames while Link waits (`doorTimer`), then he goes through. The doorway should be 64 wide and 106 high. |
+| `zl_door_shutter` | Door_Shutter | The dungeon door that slides up. A: it rises 200 (speed up to 15 by 3 a frame, `NA_SE_EV_SLIDE_DOOR_OPEN`), Link walks on 120 at speed 5, and once he is 50 past it comes down (up to 20 by 8, `NA_SE_EV_SLIDE_DOOR_CLOSE`) with `NA_SE_EV_STONE_BOUND` and a little quake. The camera is the same as `zl_door`'s with 12 / 15 / 10 frames. Spawnflag 1: locked, like `zl_door` (it only starts up once the chains are off). The doorway should be 88 wide and 120 high, with wall above for it to slide into. Not done: bars until a room is cleared. |
 | `zl_grass` | En_Kusa | `type` 0: a bush, solid, leaves its stump and drops from OoT's table 0 (rupees, hearts, magic, arrows, or whatever Link is short of). `type` 1: a tuft of grass to walk through, gone when cut, drops a heart or arrows half the time. The sword, spins, bombs and arrows cut them. Models from `make_object_models.py` (`bush.mdl`, `bush_stump.mdl`, `grass.mdl`). |
 | `trigger_zmessage` | – | Shows a text box. When it closes, `target` fires with USE_ON for the first choice and USE_OFF otherwise. |
 | `ambient_zmusic` | Audio_QueueSeqCmd | Plays music on map start or when triggered. Keys: `track` (a name from `resource/zl_music.txt` or a file), `fadein`, `fadeout`, `volume`. Flags: 1 = play on start, 2 = no loop, 4 = toggle. |
@@ -180,7 +183,17 @@ tools/zelda/       sprite/font generator, test map generator, decomp ripper, sfx
 - no damage while talking or during i-frames (20 frames after a hit, roll frames 8–18)
 - frontal shield block
 - double defense halves damage
-- knockback and knockdown
+- how he takes it (`func_80837C0C`), `NA_SE_PL_DAMAGE` every time:
+  - **a flinch** (`Player_Action_8084370C`): one of `D_808544B0`'s eight, by where the hit came from (he turns to face it, or away from it when hit from behind), whether he's locked onto an enemy (the `anchor_*R` / `*R` ones) and its size: under 5 units (a quarter heart) the short `_shit` ones, 5 and over the `_hit` ones with a shove of speed 23. `NA_SE_VO_LI_DAMAGE_S`.
+  - **running on**: hit while running faster than 4 and not locked onto an enemy, he only cries out.
+  - **knocked down** (`Player_Action_8084377C` → `_80843954` → `_80843A38`): hit in the air, or by `DMG_BLAST` or 2 hearts and more (`PLAYER_HIT_RESPONSE_KNOCKBACK_LARGE`, speed 4 and 5 up). `front_downA` / `back_downA` through the air with `NA_SE_VO_LI_FALL_L`; on the ground `downB` with `NA_SE_PL_BOUND` and `NA_SE_VO_LI_FREEZE`; then `down_wake`, which the stick cuts short from frame 16.
+  - **knocked back** (`KNOCKBACK_SMALL`): a `DMG_CLUB` hit of a heart or more. A hop back (speed 3, 6 up) in the first frame of `damage_run`, standing 4 frames after landing.
+  - **electrocuted** (`PLAYER_HIT_RESPONSE_ELECTRIFIED`): `DMG_SHOCK`. 20 frames of `electric_shock` with `NA_SE_VO_LI_TAKEN_AWAY` and sparks, then `electric_shock_end` as he stands unless he moves off.
+  - The `DMG_BLAST` / 2 heart / `DMG_CLUB` rules are the port's: OoT's attacks carry their own knockback, which Half-Life's monsters don't. Not done: frozen, set on fire, voids.
+- dying (`func_80836448`): `NA_SE_VO_LI_DOWN`, `link_derth_rebirth` to frame 84 (`zl_death`; `electric_shock_end` when a shock did it) with `NA_SE_PL_BOUND` as he hits the floor, and the death camera (OnePointCutscene 9806, `Camera_KeepOn4` with `CAM_ITEM_TYPE_12`: over 30 frames round to 120° off behind him, just under level, 1.6 × his height out), letterbox, no HUD.
+  - single player: the music stops for the Game Over theme (`game_over` in `zl_music.txt`), the world goes black around him over 21 frames (`Environment_FadeInGameOverLights`; a black sheet just past him), and 20 frames after he's down the Game Over screen: the title's colours come round and its shine scrolls (`KaleidoScope_DrawGameOver`, `zl_gameover.spr` from `rip_from_decomp.py`), then "Continue playing?" Yes / No. Yes reloads the last save, No disconnects to the menu.
+  - multiplayer: the same animation, camera and sounds, no music or darkness; "Press A to respawn", which is Half-Life's respawn.
+- falling (`Player_Action_8084411C`, `func_80843E64`): starting down over a drop of more than 800 `NA_SE_VO_LI_FALL_S`, then once 120 down with more than 280 to go `NA_SE_VO_LI_FALL_L`. Landing from 400 takes half a heart, from 800 a whole one, with `NA_SE_PL_BODY_HIT`, `NA_SE_VO_LI_LAND_DAMAGE_S`, a quake and 40 intangible frames; he lands on `link_normal_landing` to frame 8 (`zl_landing_stun`) and can't move for 10 / 20 frames. Landing in a roll (stick forward, under 800) takes nothing.
 
 Outgoing damage goes the other way through `ZL_OoTDamageToHL`:
 
@@ -264,6 +277,7 @@ Every sword swing is two animations (`D_80854190`): the cut, played one frame a 
 | `ZANIM_GETITEM` | `gPlayerAnim_link_demo_get_itemA` → `link_demo_get_itemA` (out of a chest, once) | `ref_aim_squeak`, `ref_aim_trip` | deep_idle |
 | `ZANIM_GETITEM_B` | `gPlayerAnim_link_demo_get_itemB` → `link_demo_get_itemB` (picked up; he turns to the camera) | `ref_aim_squeak`, `ref_aim_trip` | deep_idle |
 | `ZANIM_CHEST` | `gPlayerAnim_link_demo_Tbox_open` → `link_demo_Tbox_open` | `ref_aim_crowbar` | crouch_idle |
+| `ZANIM_DOOR_A`, `_B` (`_FREE`) | `gPlayerAnim_link_demo_doorA_link` / `doorB_link` (`_free`) → same names | `ref_aim_crowbar` | auto |
 | `ZANIM_HOP_LAND_*`, `ZANIM_FLIP_LAND*` | `gPlayerAnim_link_fighter_Lside_jump_end` / `_endL`, `Rside_jump_end` / `_endR`, `backturn_jump_end` / `_endR` (D_80853D4C; the second when locked onto an enemy) | `crouch_idle` | full body |
 | `ZANIM_PUTAWAY` | `zl_putaway`: `gPlayerAnim_link_normal_fighter2free` (`free2fighter_free` without a shield, `zl_putaway_noshield`) over `link_normal_wait_free` legs, built by `make_link_model.py` | `ref_aim_crowbar` | full body |
 | `ZANIM_CARRY`, `_WALK`, `_RUN` | `zl_carry_wait` / `_walk` / `_run`: `gPlayerAnim_link_normal_carryB_wait` on the upper body over `link_normal_wait_free` / `walk_free` / `run_free` (`sUpperBodyLimbCopyMap`), built by `make_link_model.py`. The walk and run follow the footstep cycle. | `ref_aim_squeak`, `ref_aim_trip` | by speed |
@@ -398,6 +412,9 @@ make setup VERSION=ntsc-1.0
 
 ### HUD, font and text
 
+The HUD follows `Interface_DrawItemButtons`: the buttons at OoT's spots and sizes in their colours (the texture's own alpha makes them see through), item icons 30 / 24 wide from the button's corner, empty C buttons showing their arrows, ammo in `gAmmoDigit` digits (grey at none), the A button's label from `do_action_static` (48 x 16 against the button's 28) flipping over when it changes, and no C-up (OoT only shows it when Navi calls). The bow has no crosshair, like OoT (`zl_bow_crosshair 1` adds one); the hookshot has its red dot.
+
+
 ```sh
 python3 tools/zelda/rip_from_decomp.py --oot /path/to/oot --version ntsc-1.0
 ```
@@ -405,7 +422,8 @@ python3 tools/zelda/rip_from_decomp.py --oot /path/to/oot --version ntsc-1.0
 This writes:
 
 - `zelda/sprites/oot/*.spr`: hearts, the magic bar, rupee and key icons, button and item icons, text box textures, the font, and its `zl_font.txt` widths.
-- `zelda/sprites/oot/zl_spinring_*.spr`, `zl_spincharge_*.spr`, `zl_hitmark.spr`: the spin attack's ring and glow and the hit marks (see [Sword effects](#sword-effects)).
+- `zelda/sprites/oot/zl_spinring_*.spr`, `zl_spincharge_*.spr`, `zl_hitmark.spr`, `zl_flame.spr`, `zl_glow.spr`: the spin attack's ring and glow, the hit marks, the torch flame and the lights' halo.
+- `zelda/sprites/oot/zl_doaction.spr`, `zl_ammo.spr`, `zl_drops.spr`: the A button's labels, the ammo digits, the drops' billboards.
 - `zelda/resource/zl_oot_messages.txt`: the whole English message table with `{CODES}` converted, plus `ITEM_*` aliases for the item get messages.
 
 The client prefers both over the generated stand-ins.
@@ -478,6 +496,9 @@ This builds other OoT objects into `zelda/models/zelda/`:
 - `gossip_stone.mdl` from `object_gs`, one piece. The game squashes and stretches it through the entity's `fuser1` / `fuser2`, which the client renderer applies.
 - `bomb.mdl` from `gameplay_keep`'s `gBombCapDL` / `gBombBodyDL`. Held, it sits between Link's hands and 7 up (`sGetItemRefPos` + `shape.yOffset`); the client places it on the hands it just drew, since the server's copy trails a predicted Link. The body is a flat disc the client turns to face the camera (EnBom_Draw's billboard), and its red flash is 8 skins the server steps through on OoT's timer (it pulses faster at 40, 20 and 3 frames left, then swells for the last 3). A spark sits on the fuse. Without it, bombs are Half-Life grenades with a red glow.
 - `gi_*.mdl`, the get-item models from `sDrawItemTable`: bow, hookshot, longshot, bomb bag, heart container, recovery heart, small key, sword (OoT has no get-item Master Sword, so the Kokiri Sword's), Hylian Shield, magic jars, arrows, bombs, nuts and rupees. Their colours go through the RDP colour combiner per pixel (`(A - B) * C + D`, both cycles), since several are blends between two colours. When Link gets an item it spins over his head between his hands, 14 units up, like `Player_DrawGetItemImpl`; the same models replace the Half-Life stand-ins for pickups lying in the world.
+- `door.mdl` from `gameplay_keep`'s `gDoorSkel`: the door on its limb with both faces (each is one sided, so drawing both does what `EnDoor_OverrideLimbDraw`'s choice of face does), sequences `idle`, `open_l` and `open_r` (the adult opening animations).
+- `door_shutter.mdl`: `gDungeonDoorDL`, Door_Shutter's generic dungeon door.
+- `door_chains.mdl` and `door_lock.mdl` from `gameplay_dangeon_keep`: a locked door's four chains (a bone each, with an `unlock` sequence sliding them off like `Actor_DrawDoorLock`'s frames 10 to 0) and its padlock.
 - `treasure_chest.mdl` from `object_box`: its 4 limb skeleton, the front and lid display lists where `EnBox_PostLimbDraw` draws them, and the opening animation (`gTreasureChestAnim_00024C`, read from the decomp's standard animation format) as the `open` sequence.
 
 ### Test map
@@ -494,7 +515,8 @@ The room contains:
 - a pit with a hookshot wall
 - zombies and headcrabs
 - a scientist and a guard
-- a chest, signs, a door, crates and items
+- a chest, signs, crates and items
+- a door (`zl_door`), and a locked dungeon door (`zl_door_shutter`) into a small room with a chest; the small key is by the bow chest
 - an `ambient_zmusic`
 
 `tools/zelda/make_surface_map.py` writes `zelda/maps/zl_surfaces.map` (on Linux, `linux/compile_map.sh zl_surfaces`). It has six lanes of floor (stone, dirt, sand, grass, wood and shallow water) for hearing each floor's footsteps, jumps and landings, and an ice rink with pillars for sliding. Jabu-Jabu's floor isn't there, because `halflife.wad` has no flesh texture in `materials.txt`.

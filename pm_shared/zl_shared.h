@@ -110,12 +110,15 @@ enum zl_action_e
 	ZACT_AIM,			// First person bow / hookshot aim (CAM_MODE_AIM_ADULT)
 	ZACT_CUP,			// C-up first person look (CAM_MODE_FIRST_PERSON)
 	ZACT_HOOKFLY,		// Player_Action_HookshotFly
-	ZACT_DAMAGE,		// Player_Action_8084370C (flinch)
-	ZACT_KNOCKDOWN,		// Player_Action_8084377C / _80843954 (knocked down and getting up)
+	ZACT_DAMAGE,		// Player_Action_8084370C (flinch; sub ZHIT_*, mwa 1 = a big hit)
+	ZACT_KNOCKDOWN,		// Player_Action_8084377C / _80843954 / _80843A38 (sub ZKD_*, mwa ZKD_PHASE_*)
 	ZACT_TALK,			// Player_Action_Talk
 	ZACT_GETITEM,		// Player_Action_8084E3C4 (holding an item up over his head; sub 1 = out of a chest)
 	ZACT_DEAD,
 	ZACT_CHEST,			// Player_ActionHandler_2 -> link_demo_Tbox_open (EnBox; sub unused)
+	ZACT_DOOR,			// Player_ActionHandler_1: through a door (sub ZDOOR_*)
+	ZACT_SHOCK,			// Player_Action_8084FBF4: electrocuted (PLAYER_HIT_RESPONSE_ELECTRIFIED)
+	ZACT_FALLSTUN,		// Player_Action_Idle with fallDamageStunTimer (sub 1 = the 20 frame one)
 
 	ZACT_COUNT
 };
@@ -166,6 +169,7 @@ enum zl_action_e
 #define ZSF_HOOKSHOT	0x0800	// Hookshot chain is out, Link can't move
 #define ZSF_SWORDOUT	0x1000	// Sword in hand (Player_GetMeleeWeaponHeld), not in its sheath
 #define ZSF_HOSTILE		0x2000	// Locked onto an enemy (PLAYER_STATE1_HOSTILE_LOCK_ON)
+#define ZSF_NAVI		0x4000	// Navi has something to say: C-up talks to her (PLAYER_STATE2_21)
 
 // Stick directions relative to the facing yaw (PLAYER_STICK_DIR_*)
 #define ZDIR_NONE		-1
@@ -240,6 +244,7 @@ enum zl_mwa_e
 // ZACT_JUMP's sub: which jump func_8083A4A8 picked
 #define ZJUMP_RUN				0	// link_normal_run_jump: speedXZ > 4 and running where he faces
 #define ZJUMP_NORMAL			1	// link_normal_jump
+#define ZJUMP_LEDGE				2	// link_normal_jump up onto a low ledge (PLAYER_LEDGE_CLIMB_1)
 // Putting the sword away (sItemChangeInfo[PLAYER_ITEM_CHG_5]: fighter2free at 1.2x, the sword
 // goes into the sheath on frame 10 of 20)
 #define ZL_PUTAWAY_RATE			( 1.2f * 1.5f )		// frames per OoT frame
@@ -271,8 +276,33 @@ enum zl_mwa_e
 #define ZL_SPIN_TIME			ZL_FRAMES( 13.0f )
 #define ZL_BIG_SPIN_TIME		ZL_FRAMES( 17.0f )
 #define ZL_SpinTime( mwa )		( (mwa) == ZMWA_BIG_SPIN_1H ? ZL_BIG_SPIN_TIME : ZL_SPIN_TIME )
-#define ZL_DAMAGE_TIME			0.35f
-#define ZL_KNOCKDOWN_TIME		1.40f
+// Taking a hit (func_80837C0C). The animations play one frame a frame (Player_AnimPlayOnceAdjusted).
+// ZACT_DAMAGE's sub picks from D_808544B0: hit from behind (the push is the way he faces), and the
+// _R / anchor ones when locked onto an enemy; mwa 1 for colChkInfo.damage 5 and over, the _hit
+// ones with speedXZ 23, otherwise _shit
+#define ZHIT_BACK				2
+#define ZHIT_LOCKED				1
+#define ZL_DAMAGE_TIME			ZL_FRAMES( 7.0f )		// link_normal_front_shit, 8 frames
+#define ZL_DAMAGE_BIG_TIME		ZL_FRAMES( 15.0f )		// link_normal_front_hit, 16
+#define ZL_DAMAGE_BIG_SPEED		23.0f
+// ZACT_KNOCKDOWN: sub ZKD_BACK = pushed the way he faces (back_downA), ZKD_SMALL =
+// PLAYER_HIT_RESPONSE_KNOCKBACK_SMALL (a hop back in damage_run, standing 4 frames after landing)
+#define ZKD_BACK				1
+#define ZKD_SMALL				2
+#define ZKD_PHASE_AIR			0	// downA, through the air
+#define ZKD_PHASE_DOWN			1	// downB on the ground (NA_SE_PL_BOUND, NA_SE_VO_LI_FREEZE)
+#define ZKD_PHASE_WAKE			2	// front / back_down_wake
+#define ZL_KD_DOWNA_FRAMES( back )	( (back) ? 5.0f : 4.0f )
+#define ZL_KD_DOWNB_FRAMES( back )	( (back) ? 13.0f : 11.0f )
+#define ZL_KD_WAKE_FRAMES( back )	( (back) ? 35.0f : 38.0f )
+#define ZL_KD_WAKE_INTERRUPT	16.0f	// Player_TryActionInterrupt( .., 16 )
+#define ZL_KD_SMALL_WAIT		4.0f
+#define ZL_KNOCKDOWN_TIME		ZL_FRAMES( 4.0f + 11.0f + 38.0f )	// for Half-Life stand-in animations
+#define ZL_SHOCK_TIME			ZL_FRAMES( 20.0f )		// actionVar2 = 20
+#define ZL_SHOCK_END_TIME		ZL_FRAMES( 40.0f )		// bodyShockTimer: electric_shock_end as he stands
+// func_80843E64: half a heart from a 400 unit fall, a whole one from 800; link_normal_landing to
+// frame 8, then 10 / 20 frames where he can't move
+#define ZL_FALLSTUN_TIME( sub )	ZL_FRAMES( 8.0f + ( (sub) ? 20.0f : 10.0f ) )
 #define ZL_LEDGE_PUSH_TIME		ZL_FRAMES( 6.0f )	// ledgeClimbDelayTimer >= 6
 #define ZL_GETITEM_TIME			1.60f
 
@@ -283,6 +313,31 @@ enum zl_mwa_e
 #define ZL_CHEST_UNLOCK_TIME	ZL_FRAMES( 30.0f / 1.5f )
 #define ZL_CHEST_OPEN_TIME		ZL_FRAMES( 90.0f / 1.5f )
 #define ZL_CHEST_STAND_DIST		ZL_DIST( 29.4343f )	// Link stands this far from the chest
+
+// Doors (Player_ActionHandler_1). ZACT_DOOR's sub:
+#define ZDOOR_HINGED_L			0	// EnDoor from behind it: link_demo_doorA_link(_free), Player_Action_80845EF8
+#define ZDOOR_HINGED_R			1	// EnDoor from in front: link_demo_doorB_link(_free)
+#define ZDOOR_SLIDING			2	// DoorShutter: walk in under it (Player_Action_80845CA4)
+// ZACT_DOOR's mwa 1: a key is going into the lock first. doorTimer 10: Link waits 10 frames
+// while the lock's chains slide off (lockTimer), then goes through
+#define ZL_DOOR_LOCK_TIME		ZL_FRAMES( 10.0f )
+#define ZL_DoorWait( state )	( ZL_GetMWA( state ) ? ZL_DOOR_LOCK_TIME : 0.0f )
+// The hinged ones are 100 frame animations at playSpeed 1 that carry Link through on their root
+// (ANIM_FLAG_UPDATE_XZ); he starts 22 units from the door. The door's own animation
+// (gDoorAdultOpening*Anim, 66 frames) plays at 1.5, actor skeletons going one frame a frame at
+// playSpeed 1: NA_SE_OC_DOOR_OPEN on its frame 25, NA_SE_EV_DOOR_CLOSE on frame 60.
+#define ZL_DOOR_FRAMES			100.0f
+#define ZL_DOOR_TIME			ZL_FRAMES( ZL_DOOR_FRAMES / ZL_ANIM_RATE )
+#define ZL_DOOR_STAND_DIST		22.0f
+#define ZL_DOOR_ANIM_RATE		1.5f
+#define ZL_DOOR_OPEN_TIME		ZL_FRAMES( 25.0f / ZL_DOOR_ANIM_RATE )
+#define ZL_DOOR_CLOSE_TIME		ZL_FRAMES( 60.0f / ZL_DOOR_ANIM_RATE )
+#define ZL_DOOR_SWING_TIME		ZL_FRAMES( 66.0f / ZL_DOOR_ANIM_RATE )
+// Sliding: speed 5 toward 120 units on from where he stood (about 16 frames with the speed
+// coming up), then he waits for the door camera (12 + 15 + 10 frames) to finish
+#define ZL_SHUTTER_WALK_SPEED	5.0f
+#define ZL_SHUTTER_WALK_TIME	ZL_FRAMES( 17.0f )
+#define ZL_SHUTTER_TIME			ZL_FRAMES( 37.0f )
 
 // Ledges (Player_UpdateBgCheck, Player_ActionHandler_12, sAgeProperties[adult]): a ray drops
 // 10 past the wall from unk_0C 111 above his feet. Under unk_1C 41 he hops up (link_normal_jump);

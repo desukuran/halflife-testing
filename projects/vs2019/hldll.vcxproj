@@ -114,6 +114,8 @@ call ..\..\filecopy.bat $(TargetDir)\$(TargetName).pdb ..\..\..\game\mod\dlls\$(
     <ClCompile Include="..\..\dlls\zl_player.cpp" />
     <ClCompile Include="..\..\dlls\zl_sound.cpp" />
     <ClCompile Include="..\..\dlls\zl_targeting.cpp" />
+    <ClCompile Include="..\..\dlls\zl_torch.cpp" />
+    <ClCompile Include="..\..\dlls\zl_door.cpp" />
     <ClCompile Include="..\..\dlls\zl_gossip.cpp" />
     <ClCompile Include="..\..\pm_shared\pm_zelda.c" />
     <ClCompile Include="..\..\dlls\aflock.cpp" />
