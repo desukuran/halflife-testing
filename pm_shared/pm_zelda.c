@@ -8,6 +8,8 @@
 *		fuser4	time in current action
 *		iuser4	ZL_STATE_* bits
 *		iuser3	ZSF_* flags from the server (read only)
+*		vuser3	[0] speed and [1] yaw Link wants (speedXZ / yaw, see PMZ_SpeedBegin),
+*				[2] height he last stood at (fallStartHeight)
 *
 *	Camera relative control: cmd.viewangles is the camera, cmd.forwardmove/sidemove is the
 *	control stick, exactly like Camera_GetInputDirYaw() + sControlStickAngle in OoT.
@@ -20,6 +22,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
 
 #include "mathlib.h"
 #include "const.h"
@@ -36,6 +39,10 @@
 #define PITCH	0
 #define YAW		1
 #define ROLL	2
+#endif
+
+#ifndef SND_STOP
+#define SND_STOP	( 1 << 5 )	// dlls/util.h
 #endif
 
 #ifndef M_PI
@@ -70,6 +77,16 @@ typedef struct pmz_s
 	float	savedGravity;
 	int		wasOnGround;
 	float	preMoveSpeed;
+
+	int		onIce;			// the actions ran on what Link wants, PMZ_IceSlide moves him
+	int		wantSet;		// wantSpeed / wantYaw are this move's, PMZ_End keeps them
+	float	wallCap;		// unk_880: most the stick may ask for against a wall, OoT units
+	float	wantSpeed;		// speedXZ (HL units/s)
+	float	wantYaw;		// yaw
+	float	slideSpeed;		// actor.speed
+	float	slideYaw;		// actor.world.rot.y
+	float	fallStart;		// fallStartHeight: origin z when he was last on the ground
+	int		startAct;		// action this move started in
 } pmz_t;
 
 static pmz_t z;
@@ -163,7 +180,7 @@ static int PMZ_Action( void )
 
 static void PMZ_SetAction( int action )
 {
-	z.state = ( z.state & ~( ZL_STATE_ACTION_MASK | ZL_STATE_SUB_MASK | ZL_STATE_CHARGED ) ) | action;
+	z.state = ( z.state & ~( ZL_STATE_ACTION_MASK | ZL_STATE_SUB_MASK | ZL_STATE_CHARGED | ZL_STATE_RECOIL ) ) | action;
 	z.time = 0;
 }
 
@@ -211,6 +228,17 @@ static void PMZ_SoundEx( int channel, int id, float vol, float freq )
 	pmove->PM_PlaySound( channel, sample, vol, ATTN_NORM, 0, ZL_SoundPitch( id, freq, pmove->RandomLong( 0, 0x7FFF ) ) );
 }
 
+static void PMZ_SoundStop( int channel, int id )
+{
+	char path[96];
+
+	if ( id < 0 || id >= ZS_COUNT || !pmove->runfuncs )
+		return;
+
+	pmove->PM_PlaySound( channel, ZL_SoundSample( path, sizeof( path ), pmove->PM_Info_ValueForKey( pmove->physinfo, "zv" ), id, 0 ),
+						 0, ATTN_NORM, SND_STOP, PITCH_NORM );
+}
+
 static void PMZ_Sound( int channel, int id, float vol )
 {
 	PMZ_SoundEx( channel, id, vol, 1.0f );
@@ -227,7 +255,22 @@ static int PMZ_Surface( void )
 
 	switch ( pmove->chtexturetype )
 	{
-	case CHAR_TEX_DIRT:		return ZL_SURF_DIRT;
+	case CHAR_TEX_DIRT:
+		// Half-Life files sand and grass under dirt; their names tell them apart (OUT_SND*, OUT_GRSS*)
+		{
+			char name[CBTEXTURENAMEMAX];
+			int i;
+
+			for ( i = 0; i < CBTEXTURENAMEMAX - 1 && pmove->sztexturename[i]; i++ )
+				name[i] = toupper( (unsigned char)pmove->sztexturename[i] );
+			name[i] = 0;
+
+			if ( strstr( name, "SND" ) || strstr( name, "SAND" ) )
+				return ZL_SURF_SAND;
+			if ( strstr( name, "GRS" ) || strstr( name, "GRASS" ) )
+				return ZL_SURF_GRASS;
+		}
+		return ZL_SURF_DIRT;
 	case CHAR_TEX_SNOW:		return ZL_SURF_SAND;
 	case CHAR_TEX_SLOSH:	return ZL_SURF_WATER;
 	case CHAR_TEX_WOOD:		return ZL_SURF_WOOD;
@@ -235,6 +278,12 @@ static int PMZ_Surface( void )
 	case CHAR_TEX_FLESH:	return ZL_SURF_JABU;
 	default:				return ZL_SURF_STONE;	// concrete, metal, tile, vents, grates, computers
 	}
+}
+
+// FLOOR_TYPE_5: the ice floors are the ones with the ice footsteps (glass)
+static int PMZ_OnIce( void )
+{
+	return PMZ_OnGround() && PMZ_Surface() == ZL_SURF_ICE;
 }
 
 // Player_PlayJumpingSfx / Player_PlayLandingSfx: NA_SE_PL_JUMP / NA_SE_PL_LAND + the floor
@@ -323,8 +372,8 @@ static float PMZ_CurvedSpeed( void )
 	c = 1.0f - cosf( t * 450.0f * (float)( 2.0 * M_PI / 65536.0 ) );
 	target = ( ( c * c ) * 30.0f + 7.0f ) * 0.14f;
 
-	if ( target > ZL_RUN_SPEED )
-		target = ZL_RUN_SPEED;
+	if ( target > z.wallCap )
+		target = z.wallCap;
 	return target;
 }
 
@@ -333,8 +382,8 @@ static float PMZ_LinearSpeed( void )
 {
 	float target = z.stickMag * 0.8f * 0.14f;
 
-	if ( target > ZL_RUN_SPEED )
-		target = ZL_RUN_SPEED;
+	if ( target > z.wallCap )
+		target = z.wallCap;
 	return target;
 }
 
@@ -389,10 +438,32 @@ static void PMZ_FaceTarget( void )
  Starting actions
 =============================================================================
 */
+// Player_SetupRoll. Its sounds come off the animation (PMZ_RollSounds).
 static void PMZ_StartRoll( void )
 {
 	PMZ_SetAction( ZACT_ROLL );
-	PMZ_Sound( CHAN_BODY, ZS_PL_ROLL, 1.0f );
+}
+
+/*
+ sRollAnimSfxList: "Hut!" on frame 1, a step and NA_SE_PL_ROLL on frame 6, the floor's landing
+ sound on frame 18 of landing_roll, which plays at 1.25 x 1.5 frames a game frame
+*/
+static void PMZ_RollSounds( void )
+{
+	float now = z.time * ZL_FPS * ZL_ROLL_RATE;
+	float prev = ( z.time - pmove->cmd.msec * 0.001f ) * ZL_FPS * ZL_ROLL_RATE;
+
+#define PMZ_ROLL_FRAME( f )	( prev < (f) && now >= (f) )
+	if ( PMZ_ROLL_FRAME( 1.0f ) )
+		PMZ_Sound( CHAN_VOICE, ZS_VO_SWORD_N, 1.0f );
+	if ( PMZ_ROLL_FRAME( 6.0f ) )
+	{
+		PMZ_FloorSound( ZS_PL_WALK_GROUND, 0.8f );
+		PMZ_Sound( CHAN_ITEM, ZS_PL_ROLL, 1.0f );
+	}
+	if ( PMZ_ROLL_FRAME( 18.0f ) )
+		PMZ_FloorSound( ZS_PL_LAND, 0.8f );
+#undef PMZ_ROLL_FRAME
 }
 
 // func_8083BCD0: sidehop (left/right) or backflip
@@ -488,12 +559,28 @@ static void PMZ_StartSlash( void )
 	PMZ_Sound( CHAN_VOICE, combo >= 3 ? ZS_VO_SWORD_L : ZS_VO_SWORD_N, 0.8f );
 }
 
-static void PMZ_StartSpin( int big )
+/*
+ Letting go of a charged spin (func_80844BE4). EnMThunder makes the noise: with the sword lit
+ (charged past 0.15) NA_SE_IT_ROLLING_CUT_LV1 for the blue ring or _LV2 for the great spin's
+ orange one; before that NA_SE_IT_ROLLING_CUT and NA_SE_IT_SWORD_SWING_HARD. func_80833A20 adds
+ the "Hyah!" and no swing sound of its own.
+*/
+static void PMZ_StartSpin( int big, int lit )
 {
+	PMZ_SoundStop( CHAN_ITEM, ZS_IT_SWORD_CHARGE );
 	PMZ_SetAction( ZACT_SPIN );
 	PMZ_SetMWA( big ? ZMWA_BIG_SPIN_1H : ZMWA_SPIN_ATTACK_1H );
+	PMZ_SetSub( lit ? 1 : 0 );		// the ring: zl_combat.cpp hits with it too
 	PMZ_SetVelocity2D( z.facing, 0 );
-	PMZ_Sound( CHAN_WEAPON, ZS_IT_ROLLING_CUT, 1.0f );
+	if ( lit )
+	{
+		PMZ_Sound( CHAN_WEAPON, big ? ZS_IT_ROLLING_CUT_LV2 : ZS_IT_ROLLING_CUT_LV1, 1.0f );
+	}
+	else
+	{
+		PMZ_Sound( CHAN_WEAPON, ZS_IT_ROLLING_CUT, 1.0f );
+		PMZ_Sound( CHAN_ITEM, ZS_IT_SWORD_SWING_HARD, 1.0f );
+	}
 	PMZ_Sound( CHAN_VOICE, ZS_VO_SWORD_L, 1.0f );
 }
 
@@ -506,10 +593,13 @@ static void PMZ_StartSpin( int big )
 */
 static float PMZ_LedgeHeight( float yaw, float *wallDist )
 {
-	pmtrace_t tr;
-	vec3_t fwd, start, end;
+	pmtrace_t tr, *ptr;
+	vec3_t fwd, probe, end, stand;
 	float r = yaw * (float)( M_PI / 180.0 );
-	float height;
+	float halfWidth = pmove->player_maxs[pmove->usehull][0];
+	float feet = pmove->origin[2] + pmove->player_mins[pmove->usehull][2];
+	float height, h;
+	int i;
 
 	fwd[0] = cosf( r );
 	fwd[1] = sinf( r );
@@ -524,62 +614,125 @@ static float PMZ_LedgeHeight( float yaw, float *wallDist )
 	if ( wallDist )
 		*wallDist = tr.fraction * 8.0f;
 
-	// Drop a hull down onto the ledge from above
-	VectorMA( pmove->origin, 20.0f, fwd, start );
-	start[2] += ZL_CLIMB_MAX + 1.0f;
-	VectorCopy( start, end );
-	end[2] = pmove->origin[2];
-
-	// Room above our head first
+	// BgCheck_EntityRaycastDown1 10 past the wall face, from the highest open spot up to
+	// unk_0C above his feet: an opening in the wall counts as a ledge too
+	VectorMA( pmove->origin, halfWidth + tr.fraction * 8.0f + ZL_DIST( 10.0f ), fwd, probe );
+	for ( h = ZL_LEDGE_CHECK; h > pmove->movevars->stepsize; h -= 4.0f )
 	{
-		vec3_t up;
-		VectorCopy( pmove->origin, up );
-		up[2] += ZL_CLIMB_MAX + 1.0f;
-		tr = pmove->PM_PlayerTrace( pmove->origin, up, PM_NORMAL, -1 );
-		if ( tr.fraction < 1.0f )
-			return 0;
+		probe[2] = feet + h;
+		if ( pmove->PM_PointContents( probe, NULL ) != CONTENTS_SOLID )
+			break;
 	}
-
-	tr = pmove->PM_PlayerTrace( start, end, PM_NORMAL, -1 );
-	if ( tr.startsolid || tr.allsolid || tr.fraction == 1.0f || tr.plane.normal[2] < 0.7f )
+	if ( h <= pmove->movevars->stepsize )
 		return 0;
 
-	height = tr.endpos[2] - pmove->origin[2];
+	VectorCopy( probe, end );
+	end[2] = feet;
+	ptr = pmove->PM_TraceLine( probe, end, PM_TRACELINE_PHYSENTSONLY, 2, -1 );
+	if ( !ptr || ptr->startsolid || ptr->fraction == 1.0f || ptr->plane.normal[2] < 0.7f )
+		return 0;
+
+	height = ptr->endpos[2] - feet;
 	if ( height <= pmove->movevars->stepsize || height > ZL_CLIMB_MAX )
+		return 0;
+
+	// BgCheck_EntityCheckCeiling: room to come up to it
+	VectorCopy( pmove->origin, end );
+	end[2] += height + 1.0f;
+	tr = pmove->PM_PlayerTrace( pmove->origin, end, PM_NORMAL, -1 );
+	if ( tr.fraction < 1.0f )
+		return 0;
+
+	// ... and to stand on it
+	VectorMA( pmove->origin, halfWidth * 2.0f + 2.0f, fwd, stand );
+	stand[2] = ptr->endpos[2] - pmove->player_mins[pmove->usehull][2] + 1.0f;
+	for ( i = 0; i < 2; i++ )
+	{
+		tr = pmove->PM_PlayerTrace( stand, stand, PM_NORMAL, -1 );
+		if ( !tr.startsolid && !tr.allsolid )
+			break;
+		VectorMA( stand, halfWidth, fwd, stand );
+	}
+	if ( i == 2 )
 		return 0;
 
 	return height;
 }
 
+/*
+ Player_ActionHandler_12 and Player_Action_80845668. The body follows the animation's root up
+ (in the model) and in from 25 back (here, since link.mdl drops the root's sideways motion);
+ the client lowers him by the height the animation doesn't cover (ZL_LocalLinkDrawOffset), kept
+ in the MWA bits. Sub 1 is 150step_up, 0 100step_up.
+*/
+// How far back from the edge the animation's root is (model units): 100step_up every 3 frames,
+// 150step_up every 5
+static const float s_climbBack[2][12] =
+{
+	{ 2526, 1918, 1497, 503, 303, 243, 66, 18, 0, 0, 0, 0 },
+	{ 2528, 1947, 1307, 1312, 1360, 891, 780, 95, 0, 0, 0, 0 },
+};
+
+static float PMZ_ClimbBack( int sub, float frame )
+{
+	float step = sub ? 5.0f : 3.0f;
+	float f = frame / step;
+	int i = (int)f;
+	if ( i >= 11 )
+		return 0;
+	return ( s_climbBack[sub][i] + ( s_climbBack[sub][i + 1] - s_climbBack[sub][i] ) * ( f - i ) ) / s_climbBack[sub][0];
+}
+
+static void PMZ_StartClimb( float height )
+{
+	int sub = height >= ZL_CLIMB_LOW ? 1 : 0;
+	float extra = height - ZL_ClimbRise( sub );
+	vec3_t up;
+	pmtrace_t tr;
+
+	PMZ_SetAction( ZACT_CLIMB );
+	PMZ_SetSub( sub );
+	PMZ_SetMWA( extra < 0 ? 0 : ( extra > 31 ? 31 : (int)( extra + 0.5f ) ) );
+
+	// On top at once
+	VectorCopy( pmove->origin, up );
+	up[2] += height + 1.0f;
+	tr = pmove->PM_PlayerTrace( pmove->origin, up, PM_NORMAL, -1 );
+	VectorCopy( tr.endpos, pmove->origin );
+	VectorClear( pmove->velocity );
+	pmove->onground = -1;
+}
+
 static int PMZ_ClimbMove( void )
 {
-	pmtrace_t tr;
-	vec3_t fwd, end;
-	float r = z.facing * (float)( M_PI / 180.0 );
+	int sub = ZL_GetSub( z.state );
+	float dt = pmove->cmd.msec * 0.001f;
+	float frame = z.time * ZL_FPS * ZL_CLIMB_RATE;
+	float prevFrame = ( z.time - dt ) * ZL_FPS * ZL_CLIMB_RATE;
+	float land = sub ? 30.0f : 16.0f;
+	float end = ZL_ClimbTime( sub );
 
-	fwd[0] = cosf( r );
-	fwd[1] = sinf( r );
-	fwd[2] = 0;
-
-	// Phase 1: straight up until the way forward is clear (link_normal_150step_up)
-	VectorMA( pmove->origin, 12.0f, fwd, end );
-	tr = pmove->PM_PlayerTrace( pmove->origin, end, PM_NORMAL, -1 );
-
-	if ( tr.fraction < 1.0f && z.time < ZL_CLIMB_TIME )
+	// Forward with the root (the start is about where he stood)
+	if ( dt > 0 )
 	{
-		pmove->velocity[0] = pmove->velocity[1] = 0;
-		pmove->velocity[2] = ZL_CLIMB_MAX / ( ZL_CLIMB_TIME * 0.6f );
+		float moved = ( PMZ_ClimbBack( sub, prevFrame < 0 ? 0 : prevFrame ) - PMZ_ClimbBack( sub, frame ) ) * ZL_CLIMB_BACK;
+		PMZ_SetVelocity2D( z.facing, moved / dt );
 	}
-	else
-	{
-		// Phase 2: step onto the ledge
-		PMZ_SetVelocity2D( z.facing, ZL_VEL( 4.0f ) );
-		pmove->velocity[2] = 0;
-	}
-
+	pmove->velocity[2] = 0;
 	PM_FlyMove();
 
-	if ( z.time >= ZL_CLIMB_TIME )
+	// Player_PlayJumpingSfx past frame 5 (at once for 100step_up), the landing and
+	// NA_SE_VO_LI_CLIMB_END on frame 30 / 16
+	if ( ( sub ? ( prevFrame < 5.0f && frame >= 5.0f ) : ( z.time - dt <= 0.0f ) ) )
+		PMZ_FloorSound( ZS_PL_JUMP, 0.8f );
+	if ( prevFrame < land && frame >= land )
+	{
+		PMZ_FloorSound( ZS_PL_LAND, 0.8f );
+		PMZ_Sound( CHAN_VOICE, ZS_VO_CLIMB_END, 1.0f );
+	}
+
+	// Player_TryActionInterrupt: the stick lets him go in the last 4 frames
+	if ( z.time >= end || ( z.stickMag > 0 && z.time >= end - ZL_FRAMES( 4.0f / ZL_CLIMB_RATE ) ) )
 	{
 		VectorClear( pmove->velocity );
 		PMZ_SetAction( ZACT_STAND );
@@ -667,6 +820,153 @@ static void PMZ_Decelerate( float stepPerFrame )
 	float yaw = PMZ_Yaw( pmove->velocity );
 	speed = PMZ_AsymStep( speed, 0, 0, ZL_ACC( stepPerFrame ) );
 	PMZ_SetVelocity2D( yaw, speed );
+}
+
+/*
+ Ice (Player_UpdateCommon, FLOOR_TYPE_5). The actions set the speed and yaw Link wants
+ (speedXZ, yaw); on ice his real movement (actor.speed, world.rot.y) only follows them:
+ Math_StepToF 0.35 a frame toward the wanted speed, turning |speedXZ| * 700 - |speed| * 100
+ binang a frame (0..1350) and only while the stick asks for speed, and pushing more than
+ 0x6000 against the slide brakes to a stop first, then sets off the new way. Off the ice the two
+ are the same. What Link wants is kept in vuser3 between moves (predicted, zelda/delta.lst).
+*/
+/*
+ Walls. Half-Life's collision clips the velocity along a wall (PM_ClipVelocity), so pushing into
+ one at an angle slides Link along it and turns his movement parallel. OoT never touches
+ speedXZ or yaw on a wall: Actor_UpdateBgCheckInfo only pushes his position back out, and
+ Player_ProcessSceneCollision caps the speed the stick may ask for by how straight he runs at it
+ (ZL_WALL_SPEED_SCALE), so head on he stands against it, facing it, ready to climb.
+
+ So on the ground, when what's left of the velocity is just a clipped version of what Link
+ wanted last move (no faster, not turned back), the actions get what he wanted again. Anything
+ else (a knockback, a bonk, landing) is taken as it is.
+*/
+static int PMZ_KeepsOwnSpeed( int act )
+{
+	return act != ZACT_CLIMB && act != ZACT_HOOKFLY && act != ZACT_DAMAGE && act != ZACT_KNOCKDOWN &&
+		   act != ZACT_BONK && act != ZACT_DEAD;
+}
+
+static void PMZ_SpeedBegin( int act )
+{
+	z.onIce = act != ZACT_CLIMB && act != ZACT_HOOKFLY && PMZ_OnIce();
+	if ( z.onIce )
+	{
+		z.slideSpeed = PMZ_Speed2D();
+		z.slideYaw = PMZ_Yaw( pmove->velocity );
+		PMZ_SetVelocity2D( z.wantYaw, z.wantSpeed );
+		return;
+	}
+
+	if ( PMZ_OnGround() && z.wasOnGround && PMZ_KeepsOwnSpeed( act ) && z.wantSpeed > 0 )
+	{
+		float r = z.wantYaw * (float)( M_PI / 180.0 );
+		float wx = cosf( r ) * z.wantSpeed, wy = sinf( r ) * z.wantSpeed;
+
+		if ( PMZ_Speed2D() <= z.wantSpeed + 1.0f && pmove->velocity[0] * wx + pmove->velocity[1] * wy >= 0 )
+			PMZ_SetVelocity2D( z.wantYaw, z.wantSpeed );
+	}
+}
+
+// unk_880 for this move: is Link up against a wall (not a step) along the way he's moving?
+static void PMZ_UpdateWallCap( void )
+{
+	pmtrace_t tr;
+	vec3_t start, end;
+	float yaw, r, into, diff;
+
+	z.wallCap = ZL_RUN_SPEED;
+	if ( !PMZ_OnGround() )
+		return;
+
+	yaw = PMZ_Speed2D() > 1.0f ? PMZ_Yaw( pmove->velocity ) : z.facing;
+	r = yaw * (float)( M_PI / 180.0 );
+
+	// Above step height, so stairs and kerbs aren't walls
+	VectorCopy( pmove->origin, start );
+	start[2] += pmove->movevars->stepsize;
+	end[0] = start[0] + cosf( r ) * 2.0f;
+	end[1] = start[1] + sinf( r ) * 2.0f;
+	end[2] = start[2];
+	tr = pmove->PM_PlayerTrace( start, end, PM_NORMAL, -1 );
+	if ( tr.fraction == 1.0f || tr.startsolid || tr.allsolid || fabsf( tr.plane.normal[2] ) > 0.7f )
+		return;
+
+	into = PMZ_AngleMod( (float)( atan2( -tr.plane.normal[1], -tr.plane.normal[0] ) * 180.0 / M_PI ) );
+	diff = fabsf( PMZ_AngleDiff( yaw, into ) ) * ( 65536.0f / 360.0f );
+
+	if ( diff * ZL_WALL_SPEED_SCALE < 1.0f )
+	{
+		z.wallCap = ZL_RUN_SPEED * diff * ZL_WALL_SPEED_SCALE;
+		if ( z.wallCap < ZL_WALL_SPEED_MIN )
+			z.wallCap = ZL_WALL_SPEED_MIN;
+	}
+}
+
+static void PMZ_IceSlide( void );
+
+// After the action: remember what Link wants (on ice, PMZ_IceSlide does it and moves him)
+static void PMZ_SpeedEnd( void )
+{
+	if ( z.onIce )
+		PMZ_IceSlide();
+
+	if ( !z.onIce )
+	{
+		z.wantSpeed = PMZ_Speed2D();
+		z.wantYaw = PMZ_Yaw( pmove->velocity );
+	}
+	z.wantSet = 1;
+}
+
+static void PMZ_IceSlide( void )
+{
+	float speed = z.slideSpeed;
+	float yaw = z.slideYaw;
+	float target, targetYaw;
+
+	if ( !z.onIce )
+		return;
+
+	// Hopped off the ice this move: the hop keeps its speed
+	if ( !PMZ_OnGround() )
+	{
+		z.onIce = 0;
+		return;
+	}
+
+	z.wantSpeed = PMZ_Speed2D();
+	z.wantYaw = PMZ_Yaw( pmove->velocity );
+	target = z.wantSpeed;
+	targetYaw = z.wantYaw;
+
+	if ( fabsf( PMZ_AngleDiff( yaw, z.wantYaw ) ) > ZL_BINANG( 0x6000 ) && speed != 0 )
+	{
+		target = 0;
+		targetYaw = PMZ_AngleMod( z.wantYaw + 180.0f );
+	}
+
+	speed = PMZ_AsymStep( speed, target, ZL_ACC( 0.35f ), ZL_ACC( 0.35f ) );
+	if ( speed == 0 && target == 0 )
+		yaw = z.wantYaw;
+
+	if ( z.wantSpeed != 0 )
+	{
+		float step = ( z.wantSpeed * 700.0f - speed * 100.0f ) / ZL_VEL( 1.0f );
+
+		if ( step < 0 )
+			step = 0;
+		else if ( step > 1350.0f )
+			step = 1350.0f;
+
+		yaw = PMZ_StepAngle( yaw, targetYaw, ZL_BINANG( step * ZL_POS_RATE * ZL_FPS ) );
+	}
+
+	PMZ_SetVelocity2D( yaw, speed );
+
+	// The roll's wall bonk goes by the speed he really has
+	if ( z.preMoveSpeed > 0 )
+		z.preMoveSpeed = speed;
 }
 
 /*
@@ -808,15 +1108,26 @@ static void PMZ_ActStand( void )
 		if ( z.stickMag > 0 && fabsf( rel ) < 35.0f && !( z.sflags & ZSF_HOLDING ) )
 			height = PMZ_LedgeHeight( z.facing, NULL );
 
-		if ( height > 0 )
+		if ( height > 0 && height < ZL_CLIMB_MIN )
+		{
+			// PLAYER_LEDGE_CLIMB_1: after 3 frames he hops up (func_808389E8: link_normal_jump,
+			// yDistToLedge * 0.08 + 5.5 up, speed 2.5)
+			if ( z.time >= ZL_FRAMES( 3.0f ) )
+			{
+				PMZ_SetAction( ZACT_JUMP );
+				PMZ_SetSub( ZJUMP_NORMAL );
+				pmove->velocity[2] = ZL_VEL( ( height / ZL_UNIT ) * 0.08f + 5.5f );
+				PMZ_SetVelocity2D( z.facing, ZL_VEL( 2.5f ) );
+				pmove->onground = -1;
+				PMZ_FloorSound( ZS_PL_JUMP, 0.8f );
+				PMZ_Sound( CHAN_VOICE, ZS_VO_SWORD_N, 1.0f );
+			}
+		}
+		else if ( height > 0 )
 		{
 			// fuser4 doubles as the push timer while standing
 			if ( z.time >= ZL_LEDGE_PUSH_TIME || ( z.pressed & ZPAD_A ) )
-			{
-				PMZ_SetAction( ZACT_CLIMB );
-				PMZ_Sound( CHAN_VOICE, ZS_VO_CLIMB_END, 1.0f );
-				PMZ_Sound( CHAN_BODY, ZS_PL_CLIMB_CLIFF, 0.8f );
-			}
+				PMZ_StartClimb( height );
 		}
 		else
 		{
@@ -835,10 +1146,13 @@ static void PMZ_ActRoll( void )
 		return;
 	}
 
-	// Player_ActionHandler_7 after frame 15: roll again
-	if ( z.time >= ZL_ROLL_CHAIN_TIME && PMZ_OnGround() && ( z.pressed & ZPAD_A ) && z.stickMag > 0 )
+	PMZ_RollSounds();
+
+	// From frame 15 the sword can cut it short (Player_ActionHandler_7); another roll has to
+	// wait for frame 20, when he's back to standing
+	if ( z.time >= ZL_ROLL_CHAIN_TIME && PMZ_OnGround() && ( z.pressed & ZPAD_B ) && ( z.sflags & ZSF_HASSWORD ) )
 	{
-		PMZ_StartRoll();
+		PMZ_StartSlash();
 		return;
 	}
 
@@ -882,8 +1196,20 @@ static void PMZ_ActAir( void )
 			PMZ_SetAction( ZACT_LAND );
 			PMZ_SetMWA( dir + 1 );
 		}
+		else if ( z.fallStart - pmove->origin[2] > ZL_SHORT_LANDING_DIST &&
+				  z.fallStart - pmove->origin[2] < ZL_LANDING_ROLL_DIST &&
+				  z.stickDir == ZDIR_FORWARD && !( z.sflags & ZSF_HOLDING ) &&
+				  !( ( z.state & ZL_STATE_LOCKED ) && ( z.sflags & ZSF_HOSTILE ) ) )
+		{
+			// Fell a way with the stick forward: he rolls out of it (Player_SetupRoll)
+			PMZ_FloorSound( ZS_PL_LAND, 0.6f );
+			PMZ_StartRoll();
+			return;
+		}
 		else
 		{
+			// func_8083A098: back to standing, the landing (short_landing, landing, run_jump_end)
+			// plays until he moves; zl_anim.cpp picks it
 			PMZ_SetAction( ZACT_STAND );
 		}
 		PMZ_FloorSound( ZS_PL_LAND, 0.6f );
@@ -912,8 +1238,9 @@ static void PMZ_ActLand( void )
 
 static void PMZ_ActSlash( void )
 {
-	// Movement during the swing is root motion only
-	PMZ_Decelerate( 1.0f );
+	// Movement during the swing is root motion only. Bouncing off a wall the server set speedXZ
+	// to -14, which Player_Action_808502D0 takes back to 0 at 5 a frame.
+	PMZ_Decelerate( ( z.state & ZL_STATE_RECOIL ) ? 5.0f : 1.0f );
 
 	if ( z.time >= ZL_SLASH_COMBO_TIME && ( z.pressed & ZPAD_B ) )
 	{
@@ -921,19 +1248,15 @@ static void PMZ_ActSlash( void )
 		return;
 	}
 
-	if ( z.time >= ZL_SLASH_TIME )
+	// Holding B since the swing started charges the spin attack (unk_844, Player_ActionHandler_8)
+	if ( z.time >= ZL_SPIN_CHARGE_ENTER && ( z.pad & ZPAD_B ) && ( z.sflags & ZSF_HASSWORD ) )
 	{
-		// Holding B after a swing charges the spin attack (func_8083C50C / unk_844)
-		if ( ( z.pad & ZPAD_B ) && ( z.sflags & ZSF_HASSWORD ) )
-		{
-			PMZ_SetAction( ZACT_SPIN_CHARGE );
-			PMZ_Sound( CHAN_ITEM, ZS_IT_SWORD_CHARGE, 0.5f );
-		}
-		else
-		{
-			PMZ_SetAction( ZACT_STAND );
-		}
+		PMZ_SetAction( ZACT_SPIN_CHARGE );
+		return;
 	}
+
+	if ( z.time >= ZL_SLASH_TIME )
+		PMZ_SetAction( ZACT_STAND );
 }
 
 static void PMZ_ActJumpSlash( void )
@@ -951,6 +1274,36 @@ static void PMZ_ActJumpSlashEnd( void )
 	PMZ_Decelerate( 2.0f );
 	if ( z.time >= ZL_JUMPSLASH_END_TIME )
 		PMZ_SetAction( ZACT_STAND );
+}
+
+/*
+ Audio_PlaySwordChargeSfx: each time the charge level goes up (lit at 0.15, the great spin's
+ orange at 0.85) NA_SE_PL_SWORD_CHARGE rings once, and NA_SE_IT_SWORD_CHARGE hums at that
+ level's pitch for as long as the sword stays lit. OoT keeps the hum going by asking for it every
+ frame; the ripped sample is cut at a few seconds, so it starts over before it runs out (the
+ Half-Life stand-in loops by itself).
+*/
+#define PMZ_CHARGE_HUM_PERIOD	3.0f
+
+static void PMZ_ChargeSound( void )
+{
+	float prev = z.time - pmove->cmd.msec * 0.001f;
+	float freq = z.time >= ZL_SPIN_BIG_TIME ? ZL_SPIN_CHARGE_FREQ2 : ZL_SPIN_CHARGE_FREQ1;
+	int ripped = ZL_SoundTakes( pmove->PM_Info_ValueForKey( pmove->physinfo, "zv" ), ZS_IT_SWORD_CHARGE );
+
+	// EnMThunder makes these, and without the magic there's none (EnMThunder_EmptySpinAttack)
+	if ( z.time < ZL_SPIN_GLOW_TIME || !( z.sflags & ZSF_MAGIC ) )
+		return;
+
+	if ( prev < ZL_SPIN_GLOW_TIME || ( prev < ZL_SPIN_BIG_TIME && z.time >= ZL_SPIN_BIG_TIME ) )
+	{
+		PMZ_SoundEx( CHAN_STATIC, ZS_PL_SWORD_CHARGE, 1.0f, freq );
+		PMZ_SoundEx( CHAN_ITEM, ZS_IT_SWORD_CHARGE, 0.8f, freq );
+	}
+	else if ( ripped && (int)( ( prev - ZL_SPIN_GLOW_TIME ) / PMZ_CHARGE_HUM_PERIOD ) != (int)( ( z.time - ZL_SPIN_GLOW_TIME ) / PMZ_CHARGE_HUM_PERIOD ) )
+	{
+		PMZ_SoundEx( CHAN_ITEM, ZS_IT_SWORD_CHARGE, 0.8f, freq );
+	}
 }
 
 static void PMZ_ActSpinCharge( void )
@@ -973,22 +1326,29 @@ static void PMZ_ActSpinCharge( void )
 	if ( z.time >= ZL_SPIN_CHARGE_TIME )
 		z.state |= ZL_STATE_CHARGED;
 
+	PMZ_ChargeSound();
+
 	if ( !( z.pad & ZPAD_B ) )
 	{
 		if ( z.state & ZL_STATE_CHARGED )
-			PMZ_StartSpin( z.time >= ZL_SPIN_BIG_TIME && ( z.sflags & ZSF_MAGIC ) );
+		{
+			// func_80844BE4: 0.85 or more is the great spin, with or without the magic for its ring
+			PMZ_StartSpin( z.time >= ZL_SPIN_BIG_TIME, z.time >= ZL_SPIN_GLOW_TIME && ( z.sflags & ZSF_MAGIC ) );
+		}
 		else
+		{
+			PMZ_SoundStop( CHAN_ITEM, ZS_IT_SWORD_CHARGE );
 			PMZ_SetAction( ZACT_STAND );
+		}
 	}
 }
 
 static void PMZ_ActSpin( void )
 {
-	// HL player models have no spin; turn the whole body once around instead
-	z.facing = PMZ_AngleMod( z.facing - 360.0f * pmove->frametime / ZL_SPIN_TIME );
+	// The turn is in the animation (rolling_kiru turns the root once around)
 	PMZ_Decelerate( 4.0f );
 
-	if ( z.time >= ZL_SPIN_TIME )
+	if ( z.time >= ZL_SpinTime( ZL_GetMWA( z.state ) ) )
 		PMZ_SetAction( ZACT_STAND );
 }
 
@@ -1076,6 +1436,7 @@ void PMZ_Begin( void )
 		return;
 
 	z.state = pmove->iuser4;
+	z.startAct = ZL_GetAction( z.state );
 	z.facing = PMZ_AngleMod( pmove->fuser1 );
 	z.time = pmove->fuser4 + pmove->cmd.msec * 0.001f;
 
@@ -1089,6 +1450,10 @@ void PMZ_Begin( void )
 		PMZ_SetAction( ZACT_DEAD );
 
 	z.wasOnGround = ( z.state & ZL_STATE_ONGROUND ) != 0;
+	z.wallCap = ZL_RUN_SPEED;
+	z.wantSpeed = pmove->vuser3[0];
+	z.wantYaw = PMZ_AngleMod( pmove->vuser3[1] );
+	z.fallStart = pmove->vuser3[2];
 
 	// Read input here rather than in PMZ_Think so water / ladder moves keep button edges right
 	PMZ_ReadPad();
@@ -1119,11 +1484,14 @@ int PMZ_Think( void )
 	z.preMoveSpeed = 0;
 
 	act = PMZ_Action();
+	PMZ_SpeedBegin( act );
+	PMZ_UpdateWallCap();
 
 	// Hookshot chain out: Link stands still holding it
 	if ( ( z.sflags & ZSF_HOOKSHOT ) && act != ZACT_HOOKFLY )
 	{
 		PMZ_Decelerate( 8.0f );
+		PMZ_SpeedEnd();
 		pmove->cmd.forwardmove = pmove->cmd.sidemove = pmove->cmd.upmove = 0;
 		return 0;
 	}
@@ -1175,6 +1543,8 @@ int PMZ_Think( void )
 		break;
 	}
 
+	PMZ_SpeedEnd();
+
 	// Link owns the horizontal velocity now
 	pmove->cmd.forwardmove = pmove->cmd.sidemove = pmove->cmd.upmove = 0;
 	return 0;
@@ -1182,7 +1552,7 @@ int PMZ_Think( void )
 
 /*
  Player_PlaySteppingSfx / func_8084029C: a step phase runs over the 29 frame walk cycle at
- (speed * 0.3 + 1) frames per game frame (x1.5 for the 20 Hz update, at most 7.25) and a step
+ ZL_RUN_CYCLE_STEP frames per game frame (x1.5 for the 20 Hz update, at most 7.25) and a step
  plays as it passes frames 10 and 24. func_800F3F84 then sets the step's frequency
  0.9 .. 1.1 and volume 0.775 .. 1.0 from the speed, and NA_SE_PL_WALK_GROUND's table entry adds
  up to +16% random pitch. The phase lives in fuser2 (predicted, see zelda/delta.lst).
@@ -1196,11 +1566,19 @@ static void PMZ_Footsteps( int act, int onground )
 	if ( !onground || ( act != ZACT_STAND && act != ZACT_SHIELD && act != ZACT_SPIN_CHARGE ) || pmove->waterlevel >= 2 )
 		return;
 
-	spd = (float)sqrt( pmove->velocity[0] * pmove->velocity[0] + pmove->velocity[1] * pmove->velocity[1] ) / ZL_VEL( 1.0f );
+	// The run cycle goes by speedXZ: what Link wants, not how fast he slides on ice or along a wall
+	spd = ( z.wantSet ? z.wantSpeed : PMZ_Speed2D() ) / ZL_VEL( 1.0f );
 	if ( spd < 0.3f )
 		return;
 
-	rate = ( spd * 0.3f + 1.0f ) * 1.5f;
+	rate = ZL_RUN_CYCLE_STEP( spd );
+	if ( PMZ_IsZTargeting() && PMZ_Speed2D() > 1.0f )
+	{
+		float rel = fabsf( PMZ_AngleDiff( PMZ_Yaw( pmove->velocity ), z.facing ) );
+		if ( rel > 45.0f && rel < 135.0f )
+			rate = ZL_SIDE_CYCLE_STEP( spd );
+	}
+	rate *= 1.5f;
 	if ( rate > 7.25f )
 		rate = 7.25f;
 	rate *= pmove->cmd.msec * 0.001f * 20.0f;
@@ -1228,11 +1606,49 @@ static void PMZ_Footsteps( int act, int onground )
 	pmove->fuser2 = next;
 }
 
+/*
+ NA_SE_PL_SLIP_LEVEL while the ice carries Link along with the stick let go (Player_UpdateCommon),
+ at func_800F3F84's speed-dependent pitch and volume like the footsteps. OoT holds a looping
+ sound and drops it when the slide ends. Here the sound starts with the slide, starts again
+ before it runs out (the ripped one is a 2.7 s loop; the Half-Life stand-in is a short scrape,
+ so that one every 6 frames) and is stopped when the slide ends. fuser2, the footsteps' phase,
+ holds 100 + the frames since it started while sliding.
+*/
+#define PMZ_SLIP_TIMER	100.0f
+
+static void PMZ_SlipSound( void )
+{
+	float spd = PMZ_Speed2D() / ZL_VEL( 1.0f );
+	float t = pmove->fuser2;
+	float period, next;
+
+	if ( !z.onIce || z.wantSpeed != 0 || !PMZ_OnGround() || spd < 0.3f )
+	{
+		if ( t >= PMZ_SLIP_TIMER )
+		{
+			PMZ_SoundStop( CHAN_BODY, ZS_PL_SLIP );
+			pmove->fuser2 = 0;
+		}
+		return;
+	}
+
+	period = ZL_SoundTakes( pmove->PM_Info_ValueForKey( pmove->physinfo, "zv" ), ZS_PL_SLIP ) ? 48.0f : 6.0f;
+	next = ( t >= PMZ_SLIP_TIMER ? t - PMZ_SLIP_TIMER : period ) + pmove->cmd.msec * 0.001f * ZL_FPS;
+	if ( next >= period )
+	{
+		float r = spd > 6.0f ? 1.0f : spd / 6.0f;
+		PMZ_SoundEx( CHAN_BODY, ZS_PL_SLIP, ( r * 0.225f + 0.775f ) * 0.7f, r * 0.2f + 0.9f );
+		next = fmodf( next, period );
+	}
+	pmove->fuser2 = PMZ_SLIP_TIMER + next;
+}
+
 void PMZ_PostMove( void )
 {
 	int act = PMZ_Action();
 	int onground = PMZ_OnGround();
 
+	PMZ_SlipSound();		// first: it hands fuser2 back to the footsteps when the slide ends
 	PMZ_Footsteps( act, onground );
 
 	// Clamp to minVelocityY
@@ -1245,17 +1661,23 @@ void PMZ_PostMove( void )
 		pmtrace_t tr;
 		vec3_t end;
 		float speedOoT = PMZ_Speed2D() / ZL_VEL( 1.0f );
+		// yaw - shape.rot.y: running the way he faces
+		float off = fabsf( PMZ_AngleDiff( PMZ_Yaw( pmove->velocity ), z.facing ) );
 
 		VectorCopy( pmove->origin, end );
 		end[2] -= 40.0f;
 		tr = pmove->PM_PlayerTrace( pmove->origin, end, PM_NORMAL, -1 );
 
-		if ( tr.fraction == 1.0f && speedOoT > 1.0f )
+		// Player_Action_8084411C: speedXZ > 3 within 0x2000 of his facing jumps, otherwise he
+		// drops off
+		if ( tr.fraction == 1.0f && speedOoT > 3.0f && off < 45.0f )
 		{
-			// IREG(66..69): fast runs give the full 7.5, walking gives a hop
+			// IREG(66..69): fast runs give the full 7.5, slower ones less
 			float vy = ( speedOoT > 5.9f ) ? 7.5f : ( 1.25f + 0.2f * speedOoT );
 			pmove->velocity[2] = ZL_VEL( vy );
 			PMZ_SetAction( ZACT_JUMP );
+			// run_jump when he's fast and dead ahead (0x1000), the standing jump otherwise
+			PMZ_SetSub( ( speedOoT > 4.0f && off < 22.5f ) ? ZJUMP_RUN : ZJUMP_NORMAL );
 			PMZ_FloorSound( ZS_PL_JUMP, 0.8f );		// func_80838940
 			PMZ_Sound( CHAN_VOICE, ZS_VO_AUTO_JUMP, 1.0f );
 		}
@@ -1281,10 +1703,13 @@ void PMZ_PostMove( void )
 			end[2] = pmove->origin[2];
 			tr = pmove->PM_PlayerTrace( pmove->origin, end, PM_NORMAL, -1 );
 
-			if ( tr.fraction < 1.0f && fabsf( tr.plane.normal[2] ) < 0.3f )
+			// sWorldYawToTouchedWall < 0x2000: within 45 degrees of head on
+			if ( tr.fraction < 1.0f && fabsf( tr.plane.normal[2] ) < 0.3f &&
+				 fabsf( PMZ_AngleDiff( z.facing, (float)( atan2( -tr.plane.normal[1], -tr.plane.normal[0] ) * 180.0 / M_PI ) ) ) < 45.0f )
 			{
 				PMZ_SetAction( ZACT_BONK );
 				PMZ_SetVelocity2D( z.facing, -z.preMoveSpeed );
+				z.wantSet = 0;
 				PMZ_Sound( CHAN_BODY, ZS_PL_BODY_HIT, 1.0f );
 				PMZ_Sound( CHAN_VOICE, ZS_VO_CLIMB_END, 1.0f );
 				pmove->punchangle[0] = -6.0f;
@@ -1318,15 +1743,41 @@ void PMZ_End( void )
 			PMZ_SetAction( ZACT_STAND );
 	}
 
+	// However the charge ended, the hum goes with it
+	if ( z.startAct == ZACT_SPIN_CHARGE && PMZ_Action() != ZACT_SPIN_CHARGE )
+		PMZ_SoundStop( CHAN_ITEM, ZS_IT_SWORD_CHARGE );
+
 	z.state = ( z.state & ~ZL_STATE_BUTTONS_MASK ) | ( ( z.pad << ZL_STATE_BUTTONS_SHIFT ) & ZL_STATE_BUTTONS_MASK );
 
 	// fuser4 is networked with 22 bits at 1/128: keep it bounded
 	if ( z.time > 1000.0f )
 		z.time = 1000.0f;
 
+	// Moves PMZ_Think didn't run (climbing, hookshot flight, swimming, ladders): take what he has
+	if ( !z.wantSet )
+	{
+		z.wantSpeed = PMZ_Speed2D();
+		z.wantYaw = PMZ_Yaw( pmove->velocity );
+	}
+
 	pmove->iuser4 = z.state;
 	pmove->fuser1 = z.facing;
 	pmove->fuser4 = z.time;
+	pmove->vuser3[0] = z.wantSpeed;
+	pmove->vuser3[1] = z.wantYaw;
+
+	// fallStartHeight follows him while he's on the ground (or swimming, climbing, on a ladder).
+	// Not on the move that lands a jump: PMZ_ActAir measures the fall on the next one.
+	{
+		int act = PMZ_Action();
+		int air = act == ZACT_SIDEHOP || act == ZACT_BACKFLIP || act == ZACT_JUMP || act == ZACT_FALL ||
+				  act == ZACT_JUMPSLASH;
+
+		if ( ( PMZ_OnGround() && !air ) || pmove->waterlevel >= 2 || pmove->movetype == MOVETYPE_FLY ||
+			 act == ZACT_CLIMB || act == ZACT_HOOKFLY )
+			z.fallStart = pmove->origin[2];
+	}
+	pmove->vuser3[2] = z.fallStart;
 
 	if ( !pmove->server )
 	{

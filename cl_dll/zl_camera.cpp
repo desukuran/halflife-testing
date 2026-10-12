@@ -30,8 +30,13 @@
 #include "pmtrace.h"
 #include "pm_zelda.h"
 #include "zl_client.h"
+#include "studio.h"
+#include "r_studioint.h"
+#include "event_api.h"
 
 #include <math.h>
+
+extern engine_studio_api_t IEngineStudio;
 
 extern vec3_t v_angles, v_origin;	// view.cpp
 
@@ -130,6 +135,11 @@ int ZCam_IsThirdPerson( void )
 int ZCam_IsFirstPerson( void )
 {
 	return ZL_IsLink() && s_cam.firstPerson;
+}
+
+float ZCam_ViewPitch( void )
+{
+	return s_cam.viewPitch;
 }
 
 float ZCam_Letterbox( void )
@@ -373,6 +383,132 @@ static void ZCam_SetView( struct ref_params_s *pparams, const Vector &eye, const
 	s_cam.viewPitch = ang[0];
 }
 
+/*
+=============================================================================
+ First person arms (Player_OverrideLimbDrawGameplayFirstPerson)
+
+ Aiming the bow or hookshot, OoT draws only Link's arms and what he holds, from the aiming
+ camera. models/player/link/v_link_aim.mdl (tools/zelda/make_link_model.py, from your ROM) is
+ built in that camera's space, so it is the view model here. The upper body animation comes up
+ once (link_bow_bow_ready / link_hook_shot_ready, func_80834D2C) then idles (D_808543D4). C-up's
+ first person draws nothing, and without the model there are no arms.
+=============================================================================
+*/
+static struct model_s *s_aimModel;
+static int s_aimModelTried;
+static int s_aimSeq = -1;
+static int s_aimHook = -1;
+static float s_aimStart;
+
+static int ZCam_FindSequence( struct model_s *mod, const char *name, float *seconds )
+{
+	studiohdr_t *hdr = (studiohdr_t *)IEngineStudio.Mod_Extradata( mod );
+	if ( !hdr )
+		return -1;
+	mstudioseqdesc_t *seq = (mstudioseqdesc_t *)( (byte *)hdr + hdr->seqindex );
+	for ( int i = 0; i < hdr->numseq; i++ )
+	{
+		if ( !stricmp( seq[i].label, name ) )
+		{
+			if ( seconds )
+				*seconds = seq[i].fps > 0 ? ( seq[i].numframes - 1 ) / seq[i].fps : 0;
+			return i;
+		}
+	}
+	return -1;
+}
+
+/*
+ Player_DrawHookshotReticle: aiming the hookshot, a red dot sits wherever it would hit within
+ its reach (38600 / 77600 model units from the hand; here the server's range from the eye, where
+ the hook really leaves from). Traced here, while prediction's physents are set up; the HUD draws it.
+*/
+static int s_hookDotValid;
+static Vector s_hookDot;
+
+int ZCam_HookDot( float *pos )
+{
+	if ( !s_hookDotValid || !ZCam_IsFirstPerson() )
+		return 0;
+	VectorCopy( s_hookDot, pos );
+	return 1;
+}
+
+static void ZCam_TraceHookDot( struct ref_params_s *pparams, int item )
+{
+	s_hookDotValid = 0;
+	if ( item != ZITEM_HOOKSHOT && item != ZITEM_LONGSHOT )
+		return;
+
+	Vector fwd, right, up;
+	AngleVectors( pparams->viewangles, fwd, right, up );
+	Vector start = pparams->vieworg;
+	Vector end = start + fwd * ( ZL_HOOK_RANGE * ( item == ZITEM_LONGSHOT ? 2.0f : 1.0f ) + 16.0f );
+
+	pmtrace_t *tr = gEngfuncs.PM_TraceLine( (float *)&start.x, (float *)&end.x, PM_TRACELINE_PHYSENTSONLY, 2, -1 );
+	if ( tr && tr->fraction < 1.0f && !tr->startsolid )
+	{
+		s_hookDot = Vector( tr->endpos[0], tr->endpos[1], tr->endpos[2] );
+		s_hookDotValid = 1;
+	}
+}
+
+static void ZCam_AimArms( struct ref_params_s *pparams, int act, int state )
+{
+	cl_entity_t *vm = gEngfuncs.GetViewModel();
+	if ( !vm )
+		return;
+
+	int item = ( act == ZACT_AIM ) ? g_zl.cItem[min( 2, max( 0, ZL_GetSub( state ) ) )] : ZITEM_NONE;
+	int hook = ( item == ZITEM_HOOKSHOT || item == ZITEM_LONGSHOT );
+
+	ZCam_TraceHookDot( pparams, item );
+
+	if ( !s_aimModelTried )
+	{
+		int index;
+		s_aimModelTried = 1;
+		s_aimModel = gEngfuncs.CL_LoadModel( "models/player/link/v_link_aim.mdl", &index );
+	}
+
+	if ( !s_aimModel || ( item != ZITEM_BOW && !hook ) )
+	{
+		if ( s_aimModel && vm->model == s_aimModel )
+			vm->model = NULL;
+		s_aimSeq = -1;
+		return;
+	}
+
+	// Ready once, then the idle loop
+	float readyTime = 0;
+	int ready = ZCam_FindSequence( s_aimModel, hook ? "link_hook_shot_ready" : "link_bow_bow_ready", &readyTime );
+	int idle = ZCam_FindSequence( s_aimModel, hook ? "link_hook_wait" : "link_bow_bow_wait", NULL );
+	int want;
+	if ( s_aimSeq < 0 || hook != s_aimHook )
+	{
+		s_aimStart = pparams->time;
+		s_aimHook = hook;
+		want = ready >= 0 ? ready : idle;
+	}
+	else
+		want = ( pparams->time - s_aimStart >= readyTime || ready < 0 ) ? idle : ready;
+
+	vm->model = s_aimModel;
+	if ( want >= 0 && want != s_aimSeq )
+	{
+		s_aimSeq = want;
+		gEngfuncs.pEventAPI->EV_WeaponAnimation( want, hook ? 1 : 0 );
+	}
+
+	// The model is built around OoT's eye: put it on ours, turned with the view
+	VectorCopy( pparams->vieworg, vm->origin );
+	vm->angles[0] = -pparams->viewangles[0];
+	vm->angles[1] = pparams->viewangles[1];
+	vm->angles[2] = 0;
+	VectorCopy( vm->origin, vm->curstate.origin );
+	VectorCopy( vm->angles, vm->curstate.angles );
+}
+
 void ZCam_CalcRefdef( struct ref_params_s *pparams )
 {
 	cl_entity_t *player = gEngfuncs.GetLocalPlayer();
@@ -467,6 +603,8 @@ void ZCam_CalcRefdef( struct ref_params_s *pparams )
 		VectorCopy( pparams->viewangles, v_angles );
 		VectorCopy( pparams->vieworg, v_origin );
 
+		ZCam_AimArms( pparams, act, state );
+
 		// Leave first person behind Link
 		s_cam.orbitYaw = facing + 180.0f;
 		s_cam.orbitPitch = NORM1_PITCH;
@@ -478,6 +616,7 @@ void ZCam_CalcRefdef( struct ref_params_s *pparams )
 
 	s_cam.firstPerson = 0;
 	s_cam.thirdPerson = 1;
+	ZCam_AimArms( pparams, ZACT_STAND, state );
 
 	if ( mode == ZCAM_CHEST )
 	{

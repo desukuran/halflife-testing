@@ -24,7 +24,7 @@ TEX_FLOOR = "GENERIC015V"
 TEX_WALL = "GENERIC028"
 TEX_CEIL = "GENERIC015V"
 TEX_LEDGE = "CRATE01"
-TEX_WOOD = "WOOD_FLR1"
+TEX_WOOD = "TRRM_WOOD"       # halflife.wad; "wood" in the name keeps it hookable
 TEX_CRATE = "CRATE04"
 TEX_DOOR = "LAB1_DOOR2A"
 TEX_SIGN = "WOOD_SIGN"
@@ -89,6 +89,10 @@ def main():
     world.append(box((288, 0, 0), (416, 96, 64), TEX_LEDGE))
     world.append(box((480, 0, 0), (608, 96, 100), TEX_LEDGE))
 
+    # An opening in the wall to climb into: 48 up, 96 tall, 96 deep
+    world.append(box((704, 0, 0), (800, 96, 48), TEX_LEDGE))
+    world.append(box((704, 0, 144), (800, 96, H), TEX_LEDGE))
+
     # A gap along the east side with a high platform across it and a wooden wall to hookshot
     world.append(box((1408, 640, PIT), (1536, 1024, 160), TEX_LEDGE))            # high platform
     world.append(box((1528, 700, 160), (1536, 960, 320), TEX_WOOD))              # hookshot target
@@ -147,6 +151,12 @@ def main():
         z = 48 if i == 0 else (108 if i == 1 else 8)
         ents.append(entity("item_zl_rupee" if i < 3 else "item_zl_rupee_blue", {"origin": f"{x} {y} {z}"}))
     ents.append(entity("item_zl_heart", {"origin": "1460 820 168"}))
+
+    # Grass and bushes to cut (En_Kusa)
+    for x, y in [(100, 880), (150, 940), (200, 880), (250, 960)]:
+        ents.append(entity("zl_grass", {"origin": f"{x} {y} 0", "type": "1"}))
+    for x, y in [(400, 560), (470, 600)]:
+        ents.append(entity("zl_grass", {"origin": f"{x} {y} 0", "type": "0"}))
     ents.append(entity("item_zl_rupee_red", {"origin": "1480 900 168"}))
     ents.append(entity("item_zl_heartcontainer", {"origin": "1460 700 168"}))
 

@@ -175,6 +175,23 @@ int LookupSequence( void *pmodel, const char *label )
 }
 
 
+// Zelda: a bone by name (studiomdl doesn't keep link.mdl's bones in OoT's limb order), -1 if none
+int LookupBone( void *pmodel, const char *name )
+{
+	studiohdr_t *pstudiohdr = (studiohdr_t *)pmodel;
+	if ( !pstudiohdr )
+		return -1;
+
+	mstudiobone_t *pbones = (mstudiobone_t *)( (byte *)pstudiohdr + pstudiohdr->boneindex );
+	for ( int i = 0; i < pstudiohdr->numbones; i++ )
+	{
+		if ( !strcmp( pbones[i].name, name ) )
+			return i;
+	}
+	return -1;
+}
+
+
 int IsSoundEvent( int eventNumber )
 {
 	if ( eventNumber == SCRIPT_EVENT_SOUND || eventNumber == SCRIPT_EVENT_SOUND_VOICE )

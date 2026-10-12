@@ -27,9 +27,11 @@ struct model_s *g_zlSprFont;
 struct model_s *g_zlSprHeart;
 struct model_s *g_zlSprButton;
 struct model_s *g_zlSprReticle;
+struct model_s *g_zlSprHookDot;
 struct model_s *g_zlSprTextbox;
 struct model_s *g_zlSprHudIcons;
 struct model_s *g_zlSprIcons;
+struct model_s *g_zlSprMagic;
 
 static int s_drawing;
 static void ZDraw_LoadFontWidths( void );
@@ -112,9 +114,11 @@ void ZDraw_VidInit( void )
 	g_zlSprHeart	= ZDraw_LoadSprite( "sprites/zl_heart.spr" );
 	g_zlSprButton	= ZDraw_LoadSprite( "sprites/zl_button.spr" );
 	g_zlSprReticle	= ZDraw_LoadSprite( "sprites/zl_reticle.spr" );
+	g_zlSprHookDot	= ZDraw_LoadSprite( "sprites/zl_hookdot.spr" );
 	g_zlSprTextbox	= ZDraw_LoadSprite( "sprites/zl_textbox.spr" );
 	g_zlSprHudIcons	= ZDraw_LoadSprite( "sprites/zl_hudicons.spr" );
 	g_zlSprIcons	= ZDraw_LoadSprite( "sprites/zl_icons.spr" );
+	g_zlSprMagic	= ZDraw_LoadSprite( "sprites/zl_magic.spr" );
 
 	ZDraw_LoadFontWidths();
 }
@@ -228,6 +232,29 @@ void ZDraw_Sprite( struct model_s *spr, int frame, float x, float y, float w, fl
 	float xs[4] = { x, x + w, x + w, x };
 	float ys[4] = { y, y, y + h, y + h };
 	ZDraw_Quad( spr, frame, xs, ys, r, g, b, a );
+}
+
+// Part of a sprite frame (u / v 0..1, u1 < u0 mirrors it)
+void ZDraw_SpriteUV( struct model_s *spr, int frame, float x, float y, float w, float h, float u0, float v0, float u1, float v1, int r, int g, int b, int a )
+{
+	triangleapi_t *tri = gEngfuncs.pTriAPI;
+
+	if ( !spr || ( zl_hud_draw && zl_hud_draw->value ) )
+	{
+		ZDraw_Sprite( spr, frame, x, y, w, h, r, g, b, a );
+		return;
+	}
+	if ( !tri->SpriteTexture( spr, frame ) )
+		return;
+
+	tri->RenderMode( kRenderTransAlpha );
+	tri->Color4ub( r, g, b, a );
+	tri->Begin( TRI_QUADS );
+		tri->TexCoord2f( u0, v0 );	tri->Vertex3f( x, y, 0 );
+		tri->TexCoord2f( u1, v0 );	tri->Vertex3f( x + w, y, 0 );
+		tri->TexCoord2f( u1, v1 );	tri->Vertex3f( x + w, y + h, 0 );
+		tri->TexCoord2f( u0, v1 );	tri->Vertex3f( x, y + h, 0 );
+	tri->End();
 }
 
 void ZDraw_SpriteRotated( struct model_s *spr, int frame, float cx, float cy, float w, float h, float deg, int r, int g, int b, int a )

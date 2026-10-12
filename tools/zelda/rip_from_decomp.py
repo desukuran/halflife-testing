@@ -18,9 +18,14 @@ keeps it out of the repository.
 It writes, under zelda/ (all of it git ignored):
     sprites/oot/zl_heart.spr     gHeart*Tex (parameter_static)
     sprites/oot/zl_hudicons.spr  gRupeeCounterIconTex, gSmallKeyCounterIconTex, gCounterDigit0-9Tex
+    sprites/oot/zl_magic.spr     gMagicMeterEndTex, gMagicMeterMidTex, gMagicMeterFillTex
+    sprites/oot/zl_drops.spr     gDrop*Tex: the bombs, arrows, nuts and magic jars lying around
     sprites/oot/zl_button.spr    gButtonBackgroundTex, gEquippedItemOutlineTex, gEmptyCLeftArrowTex
     sprites/oot/zl_icons.spr     gItemIcon*Tex (icon_item_static), gQuestIcon*Tex
     sprites/oot/zl_font.spr      gMsgChar*Tex (nes_font_static) + zl_font.txt widths
+    sprites/oot/zl_spinring_*.spr, zl_spincharge_*.spr, zl_hitmark.spr
+                                 gSpinAttack*Tex, gEffHitMark*Tex (gameplay_keep), baked
+                                 frame by frame with the colours OoT draws them in
     resource/zl_oot_messages.txt   every English message, in the zl_messages.txt format,
                                    named by text id (0x1000 ...), plus ITEM_* aliases
 
@@ -129,6 +134,29 @@ def rip_hud_icons(assets, out):
     mk.write_spr(os.path.join(out, "zl_hudicons.spr"), frames, mk.SPR_INDEXALPHA, mk.indexalpha_palette())
 
 
+def rip_magic(assets, out):
+    imgs = []
+    for n in ("gMagicMeterEndTex", "gMagicMeterMidTex", "gMagicMeterFillTex"):
+        p = find_png(assets, "parameter_static", n)
+        if not p:
+            print(f"  missing {n}, keeping the generated magic meter")
+            return
+        imgs.append(load_la(p))
+    (end_i, end_a), (mid_i, mid_a), (fill_ia_i, fill_ia_a) = imgs
+    # The fill is loaded as a 16x16 I4 texture (gDPLoadMultiBlock_4b); the extractor wrote the same
+    # 64 bytes as 8x8 IA8. Each byte is two I4 texels: its I nibble, then its A nibble.
+    fill_i = Image.new("L", (16, 16))
+    pi, pa, po = fill_ia_i.load(), fill_ia_a.load(), fill_i.load()
+    for y in range(8):
+        for x in range(8):
+            k = y * 8 + x
+            hi, lo = round(pi[x, y] / 17), round(pa[x, y] / 17)
+            po[(2 * k) % 16, (2 * k) // 16] = hi * 17
+            po[(2 * k + 1) % 16, (2 * k + 1) // 16] = lo * 17
+    mk.write_spr(os.path.join(out, "zl_magic.spr"), mk.magic_frames(end_i, end_a, mid_i, mid_a, fill_i),
+                 mk.SPR_INDEXALPHA, mk.indexalpha_palette())
+
+
 def rip_buttons(assets, out):
     frames = []
     for n, rot in (("gButtonBackgroundTex", 0), ("gEquippedItemOutlineTex", 0), ("gEmptyCLeftArrowTex", -90)):
@@ -184,6 +212,74 @@ def rip_item_icons(assets, out):
             images.append(generated[idx])
     frames, palette = mk.rgba_frames_to_alphtest(images)
     mk.write_spr(os.path.join(out, "zl_icons.spr"), frames, mk.SPR_ALPHTEST, palette)
+
+
+def rip_hookdot(assets, out):
+    # gLinkAdultHookshotReticleTex: an I8 texture, drawn with PRIMITIVE red (the HUD tints it)
+    p = os.path.join(assets, "objects", "object_link_boy")
+    path = None
+    if os.path.isdir(p):
+        for f in os.listdir(p):
+            if f.startswith("gLinkAdultHookshotReticleTex.") and f.endswith(".png"):
+                path = os.path.join(p, f)
+    if not path:
+        print("  gLinkAdultHookshotReticleTex not found")
+        return
+    i, a = load_la(path)
+    mk.write_spr(os.path.join(out, "zl_hookdot.spr"), [mk.alpha_frame(i)], mk.SPR_INDEXALPHA, mk.indexalpha_palette())
+
+
+def keep_png(assets, name):
+    """A gameplay_keep texture as rows of 0..1 intensity"""
+    d = os.path.join(assets, "objects", "gameplay_keep")
+    if os.path.isdir(d):
+        for f in os.listdir(d):
+            if f.startswith(name + ".") and f.endswith(".png"):
+                i, _ = load_la(os.path.join(d, f))
+                w, h = i.size
+                px = i.load()
+                return [[px[x, y] / 255.0 for x in range(w)] for y in range(h)]
+    print(f"  {name} not found")
+    return None
+
+
+def rip_sword_effects(assets, out):
+    # The spin attack (EnMThunder): its ring and the charging glow on the blade
+    fire = keep_png(assets, "gSpinAttackFireTex")
+    magic = keep_png(assets, "gSpinAttackMagicTex")
+    if fire and magic:
+        mk.bake_spin_ring(out, "zl_spinring_w.spr", fire, magic, "weak")
+        mk.bake_spin_ring(out, "zl_spinring_s.spr", fire, magic, "strong")
+    c1 = keep_png(assets, "gSpinAttackCharging1Tex")
+    c2 = keep_png(assets, "gSpinAttackCharging2Tex")
+    if c1 and c2:
+        mk.bake_spin_charge(out, "zl_spincharge_b.spr", c1, c2, "weak")
+        mk.bake_spin_charge(out, "zl_spincharge_o.spr", c1, c2, "strong")
+    # EffectSsHitMark: 32x24 textures of which the quad shows 24x24
+    marks = [keep_png(assets, f"gEffHitMark{k}Tex") for k in range(1, 9)]
+    if all(marks):
+        mk.bake_hitmark(out, [[row[:24] for row in m[:24]] for m in marks])
+
+
+def rip_drops(assets, out):
+    # EnItem00_DrawCollectible's billboards, sItemDropTex order (the frame is the texture index)
+    names = ["gDropRecoveryHeartTex", "gDropBombTex", "gDropArrows1Tex", "gDropArrows2Tex",
+             "gDropArrows3Tex", "gDropBombTex", "gDropDekuNutTex", "gDropDekuStickTex",
+             "gDropMagicLargeTex", "gDropMagicSmallTex", "gDropDekuSeedsTex", "gDropKeySmallTex"]
+    d = os.path.join(assets, "objects", "gameplay_keep")
+    images = []
+    for n in names:
+        path = None
+        if os.path.isdir(d):
+            for f in os.listdir(d):
+                if f.startswith(n + ".") and f.endswith(".png"):
+                    path = os.path.join(d, f)
+        if not path:
+            print(f"  {n} not found")
+            return
+        images.append(Image.open(path).convert("RGBA"))
+    frames, palette = mk.rgba_frames_to_alphtest(images)
+    mk.write_spr(os.path.join(out, "zl_drops.spr"), frames, mk.SPR_ALPHTEST, palette)
 
 
 def read_font_widths(oot):
@@ -423,8 +519,12 @@ def main():
     sprites = os.path.join(args.out, "sprites", "oot")
     print("hearts");     rip_hearts(assets, sprites)
     print("hud icons");  rip_hud_icons(assets, sprites)
+    print("magic meter"); rip_magic(assets, sprites)
     print("buttons");    rip_buttons(assets, sprites)
     print("item icons"); rip_item_icons(assets, sprites)
+    print("hookshot dot"); rip_hookdot(assets, sprites)
+    print("sword effects"); rip_sword_effects(assets, sprites)
+    print("drops");      rip_drops(assets, sprites)
     print("font");       rip_font(assets, args.oot, sprites)
     print("messages");   rip_messages(extracted, os.path.join(args.out, "resource"))
 

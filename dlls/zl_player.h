@@ -139,6 +139,7 @@ public:
 	int		m_iZHeldItem;			// item the C button is using right now
 	BOOL	m_fZSwordOut;			// sword (and shield) in hand until A "Put Away"
 	float	m_flZPutAwayStart;		// A "Put Away" started (fighter2free plays), 0 = not putting away
+	float	m_flZPutAwayReady;		// when "Put Away" came on offer (putAwayCooldownTimer), 0 = it isn't
 	float	m_flZTalkEndTime;		// when the last text box closed (its A press mustn't start another)
 	BOOL	m_fZWorldFrozen;
 	float	m_flZBlinkNext;			// next blink (link.mdl eye skins)
@@ -170,6 +171,14 @@ public:
 	// Animation (zl_anim.cpp)
 	int		m_iZAnimState;			// what the last picked animation was keyed on
 	int		m_iZAnim;
+	int		m_iZLandAnim;			// landing that plays standing until he moves (func_8083A098), 0 = none
+	int		m_iZLandNext;			// what follows it (a swing's end animation)
+	int		m_iZIdleAnim;			// standing still: the idle or fidget playing (Player_ChooseNextIdleAnim)
+	int		m_iZIdleType;			// idleType: every other idle is a fidget, -1 at critical health
+	BOOL	m_fZIdleRestart;		// play m_iZIdleAnim again from the start
+	float	m_flZIdleFrame;			// frame of it at the last ZAnimate, for its sounds
+	float	m_flZAirStart;			// fallStartHeight while he's in the air (vuser3.z)
+	float	m_flZLastSpeed;			// horizontal speed at the last ZAnimate
 	void	ZAnimate( void );
 
 	// HUD
@@ -195,6 +204,7 @@ void ZL_RegisterCvars( void );
 void ZL_PrecacheAll( void );
 void ZL_EmitSound( edict_t *pEdict, int channel, int sound, float volume, float attn, int pitch );
 const char *ZL_SoundPath( int sound );
+void ZL_SendFx( int type, const Vector &pos );
 const char *ZL_SoundTakesKey( void );
 BOOL ZL_FileExists( const char *path );	// relative to the mod folder
 	// "zv" physinfo: takes per sound id
@@ -211,6 +221,7 @@ BOOL ZL_ClientCommand( CBasePlayer *pPlayer, const char *pcmd );
 // Music (zl_music.cpp)
 void ZL_MusicPlay( const char *track, float fadein, float volume, int loop );
 void ZL_MusicStop( float fadeout );
+void ZL_MusicFanfare( const char *track, int fallbackSound );
 void ZL_MusicResend( edict_t *pPlayer );
 
 // Monster hooks
@@ -226,5 +237,7 @@ extern cvar_t zl_oot_sounds;
 extern cvar_t zl_hl_suit;
 extern cvar_t zl_drops;
 extern cvar_t zl_hookshot_any;
+extern cvar_t zl_room_env;
+extern cvar_t zl_anim_debug;
 
 #endif // ZL_PLAYER_H

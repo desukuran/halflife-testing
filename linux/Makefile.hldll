@@ -132,6 +132,7 @@ HLDLL_OBJS = \
 	$(HLDLL_OBJ_DIR)/zombie.o \
 	$(HLDLL_OBJ_DIR)/zl_anim.o \
 	$(HLDLL_OBJ_DIR)/zl_combat.o \
+	$(HLDLL_OBJ_DIR)/zl_grass.o \
 	$(HLDLL_OBJ_DIR)/zl_items.o \
 	$(HLDLL_OBJ_DIR)/zl_message.o \
 	$(HLDLL_OBJ_DIR)/zl_music.o \
@@ -188,3 +189,6 @@ clean:
 	-rm -rf $(HLWPN_OBJ_DIR)
 	-rm -rf $(HLDLL_OBJ_DIR)
 	-rm -f hl_$(ARCH).$(SHLIBEXT)
+
+# Zelda: header dependencies written by -MMD (linux/build_zelda.sh)
+-include $(shell find $(BUILD_OBJ_DIR) -name "*.d" 2>/dev/null)

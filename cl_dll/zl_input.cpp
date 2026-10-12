@@ -156,6 +156,57 @@ void ZInput_PreCreateMove( void )
 	}
 }
 
+/*
+ First person: the control stick aims (func_8084ABD8), on top of the mouse. Per 20 Hz frame:
+   holding the bow / hookshot  pitch and yaw turn sign * (1 - cos(stick * 200)) * 1500 binang,
+                               up looks down, like a plane (zl_aim_invert 0 for the other way)
+   C-up                        yaw turns stick_x * -16 (at most 3000); pitch eases toward
+                               stick_y * 240 while the stick is held up or down
+ The stick is the movement keys / left stick, scaled to OoT's +-60 like pm_zelda's.
+*/
+static void ZInput_StickAim( float frametime, struct usercmd_s *cmd )
+{
+	static cvar_t *zl_aim_invert;
+	if ( !zl_aim_invert )
+		zl_aim_invert = CVAR_CREATE( "zl_aim_invert", "1", FCVAR_ARCHIVE );
+
+	int act = ZL_PredictedAction();
+	if ( !ZCam_IsFirstPerson() || ( act != ZACT_AIM && act != ZACT_CUP ) )
+		return;
+
+	float maxs = gEngfuncs.GetClientMaxspeed();
+	if ( maxs <= 0 )
+		maxs = 320.0f;
+	float sx = max( -1.0f, min( 1.0f, cmd->sidemove / maxs ) ) * 60.0f;
+	float sy = max( -1.0f, min( 1.0f, cmd->forwardmove / maxs ) ) * 60.0f;
+	if ( !zl_aim_invert->value )
+		sy = -sy;
+	float frames = frametime * ZL_FPS;
+	const float toDeg = 360.0f / 65536.0f;
+	float yaw = 0, pitch = 0;
+
+	if ( act == ZACT_AIM )
+	{
+		float bin = 2.0f * (float)M_PI / 65536.0f;
+		pitch = ( sy >= 0 ? 1.0f : -1.0f ) * ( 1.0f - cosf( fabsf( sy ) * 200.0f * bin ) ) * 1500.0f;
+		yaw = ( sx >= 0 ? 1.0f : -1.0f ) * ( 1.0f - cosf( fabsf( sx ) * 200.0f * bin ) ) * -1500.0f;
+	}
+	else
+	{
+		yaw = max( -3000.0f, min( 3000.0f, sx * -16.0f ) );
+		if ( sy != 0 )
+		{
+			// Math_SmoothStepToS( focus.rot.x, stick_y * 240, 14, 4000, 30 )
+			float diff = sy * 240.0f - ZCam_ViewPitch() / toDeg;
+			float step = diff / 14.0f;
+			float mag = max( 30.0f, min( 4000.0f, fabsf( step ) ) );
+			pitch = fabsf( diff ) < mag ? diff : ( diff > 0 ? mag : -mag );
+		}
+	}
+
+	ZCam_AddMouse( yaw * toDeg * frames, pitch * toDeg * frames );
+}
+
 void ZInput_CreateMove( float frametime, struct usercmd_s *cmd, int active )
 {
 	static int lastPad;
@@ -187,6 +238,8 @@ void ZInput_CreateMove( float frametime, struct usercmd_s *cmd, int active )
 	lastAngles[1] = recentre[1];
 	lastAngles[2] = 0;
 	haveAngles = 1;
+
+	ZInput_StickAim( frametime, cmd );
 
 	float camAngles[3];
 	if ( ZCam_CommandAngles( camAngles ) )

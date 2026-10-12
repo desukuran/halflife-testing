@@ -20,6 +20,9 @@ fuser1 / fuser2, see StudioSetUpTransform).
                  turned 90 degrees about X), at the bomb's scale 0.01. The body is a flat disc
                  the game turns to face the camera; its red flash (PRIMITIVE added to the
                  texture) becomes 8 skins -> models/zelda/bomb.mdl
+  bush, bush_stump, grass
+                 En_Kusa: gFieldBushDL (gameplay_field_keep), object_kusa's stump and grass tuft,
+                 at its scale 0.4 -> models/zelda/bush.mdl, bush_stump.mdl, grass.mdl
   gi_*           the item Link holds over his head (sDrawItemTable in z_draw.c), each item's
                  display lists in its draw function's order, at Player_DrawGetItemImpl's
                  scale 0.2 -> models/zelda/gi_<item>.mdl
@@ -64,6 +67,11 @@ OBJECTS = [
         "rot_x90": ["gBombBodyDL"],           # Matrix_RotateZYX( 0x4000, 0, 0 ) before the body
         "flash": "gBombBodyDL",
     },
+    # En_Kusa at its scale 0.4 (ICHAIN_VEC3F_DIV1000(scale, 400)): the bush (type 0), what's
+    # left of it once cut, and the tuft of grass (types 1 and 2)
+    {"name": "bush", "object": "gameplay_field_keep", "scale": 0.4, "dls": ["gFieldBushDL"]},
+    {"name": "bush_stump", "object": "object_kusa", "scale": 0.4, "dls": ["object_kusa_DL_0002E0"]},
+    {"name": "grass", "object": "object_kusa", "scale": 0.4, "dls": ["object_kusa_DL_000140"]},
 ]
 
 # sDrawItemTable entries, display lists in the order their GetItem_Draw* function draws them

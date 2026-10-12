@@ -658,6 +658,13 @@ def main():
     os.makedirs(args.out, exist_ok=True)
 
     variants = {}
+    vpath = os.path.join(args.out, "variants.txt")
+    if args.only and os.path.exists(vpath):
+        # Just a few sounds: keep what's listed for the others
+        for line in open(vpath):
+            parts = line.split()
+            if len(parts) == 2 and not line.startswith("//") and parts[0] not in names:
+                variants[parts[0]] = int(parts[1])
     done = 0
     for name in names:
         chan, bank = chans.get(name, (None, None))
@@ -688,11 +695,11 @@ def main():
         write_wav(os.path.join(args.out, name + ".wav"), data)
         done += 1
 
-    with open(os.path.join(args.out, "variants.txt"), "w", newline="\n") as f:
+    with open(vpath, "w", newline="\n") as f:
         f.write("// Written by tools/zelda/extract_sfx.py: sounds with several takes (NAME.wav, NAME_2.wav ...)\n")
         for k, v in sorted(variants.items()):
             f.write(f"{k} {v}\n")
-    print(f"rendered {done}/{len(names)} sounds into {args.out} ({len(variants)} with several takes)")
+    print(f"rendered {done}/{len(names)} sounds into {args.out} ({sum(1 for n in names if n in variants)} with several takes)")
 
 
 if __name__ == "__main__":

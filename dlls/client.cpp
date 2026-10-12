@@ -1732,6 +1732,9 @@ void UpdateClientData ( const edict_t *ent, int sendweapons, struct clientdata_s
 	cd->fuser1			= pev->fuser1;
 	cd->fuser4			= pev->fuser4;
 	cd->fuser2			= pev->fuser2;	// Zelda: footstep phase
+	cd->vuser3.x		= pev->vuser3.x;	// Zelda: speed and yaw Link wants on ice
+	cd->vuser3.y		= pev->vuser3.y;
+	cd->vuser3.z		= pev->vuser3.z;	// and the height he last stood at (fallStartHeight)
 	cd->iuser3			= pev->iuser3;
 	cd->iuser4			= pev->iuser4;
 
@@ -1781,7 +1784,8 @@ void UpdateClientData ( const edict_t *ent, int sendweapons, struct clientdata_s
 
 					cd->m_iId = II.iId;
 
-					cd->vuser3.z	= gun->m_iSecondaryAmmoType;
+					if ( !( pl->pev->iuser3 & ZSF_ACTIVE ) )	// Zelda: vuser3.z is Link's fallStartHeight
+						cd->vuser3.z	= gun->m_iSecondaryAmmoType;
 					cd->vuser4.x	= gun->m_iPrimaryAmmoType;
 					cd->vuser4.y	= pl->m_rgAmmo[gun->m_iPrimaryAmmoType];
 					cd->vuser4.z	= pl->m_rgAmmo[gun->m_iSecondaryAmmoType];

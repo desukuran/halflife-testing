@@ -25,7 +25,7 @@
 
 zl_client_t g_zl;
 
-extern vec3_t v_angles;		// view.cpp: the final render angles
+extern vec3_t v_angles, v_origin;	// view.cpp: the final render angles and eye
 
 static cvar_t *zl_hud_gc;
 static cvar_t *zl_hud;
@@ -70,6 +70,22 @@ int ZL_LocalLinkFacing( cl_entity_t *ent, float *yaw )
 		return 0;
 	*yaw = ZL_PredictedFacing();
 	return 1;
+}
+
+// Climbing a ledge (pm_zelda.c PMZ_StartClimb): he's on top, and drawn this much lower, the height
+// the animation doesn't rise through (kept in the MWA bits), stepping back 1.5 a frame
+// (Math_StepToF( shape.yOffset, 0, 150 )) from frame 5 of 150step_up, at once for 100step_up
+float ZL_LocalLinkDrawOffset( void )
+{
+	int state = ZL_PredictedState();
+	if ( ZL_GetAction( state ) != ZACT_CLIMB )
+		return 0;
+
+	int sub = ZL_GetSub( state );
+	float extra = (float)ZL_GetMWA( state );
+	float start = sub ? ZL_FRAMES( 5.0f / ZL_CLIMB_RATE ) : 0.0f;
+	float left = extra - max( 0.0f, g_pmzPredicted.time - start ) * ZL_VEL( 1.0f );
+	return left > 0 ? left : 0;
 }
 
 int ZL_PredictedState( void )
@@ -154,11 +170,13 @@ ZL_DECLARE_MESSAGE( ZItemGet )
 void ZHud_Init( void )
 {
 	g_HudZelda.Init();
+	ZFx_Init();
 }
 
 void ZHud_VidInit( void )
 {
 	g_HudZelda.VidInit();
+	ZFx_VidInit();
 }
 
 int CHudZelda::Init( void )
@@ -283,6 +301,11 @@ int CHudZelda::MsgFunc_ZMusic( const char *pszName, int iSize, void *pbuf )
 	case ZMUS_PLAY:		ZMusic_Play( track, fade, volume, loop ); break;
 	case ZMUS_STOP:		ZMusic_Stop( 0 ); break;
 	case ZMUS_FADEOUT:	ZMusic_Stop( fade ); break;
+	case ZMUS_FANFARE:
+		// Without the music, the sound it stands in for (the "loop" byte)
+		if ( !ZMusic_Fanfare( track ) && loop != 255 )
+			ZL_PlaySound( loop, 1.0f );
+		break;
 	}
 	return 1;
 }
@@ -382,25 +405,119 @@ void CHudZelda::DrawHearts( float time )
 }
 
 // R_MAGIC_METER_X 18, R_MAGIC_METER_Y_HIGHER 34 / _LOWER 42 (more than 10 hearts)
+/*
+ Magic_DrawMeter at R_MAGIC_METER_X 18, y 34 (42 under two rows of hearts): the end cap, the
+ middle as wide as the capacity, the end again mirrored, all lerp((100, 50, 50), border colour);
+ then the fill from x 26, 7 high, R_MAGIC_FILL_COLOR (0, 200, 0) over black.
+ Magic_Update: magic goes up 4 a frame (MAGIC_STATE_ADD) and down 2 (MAGIC_STATE_CONSUME). While
+ the spin attack is lit its magic shows in yellow (MAGIC_STATE_METER_FLASH_2) and the border flashes
+ white / grey (sMagicBorderColors, sMagicBorderIndices, YREG(40..43)), and keeps flashing after
+ he lets go until the spin is over.
+*/
 void CHudZelda::DrawMagic( void )
 {
+	static const int borderColors[2][3] = { { 255, 255, 255 }, { 150, 150, 150 } };
+	static const int borderIndices[4] = { 0, 1, 1, 0 };
+	static const int borderRatios[4] = { 2, 1, 2, 1 };
+	static int border[3] = { 255, 255, 255 };
+	static int borderRatio = 2, borderStep = 1;
+	static int shown = -1;
+	static float tick;
+
 	if ( g_zl.magicCap <= 0 )
+	{
+		shown = -1;
 		return;
+	}
+
+	int act = ZL_PredictedAction();
+	int preview = act == ZACT_SPIN_CHARGE && g_pmzPredicted.time >= ZL_SPIN_CHARGE_TIME &&
+				   ( ZL_PredictedFlags() & ZSF_MAGIC ) && g_zl.magic >= ZL_SPIN_MAGIC;
+	int flash = preview || ( act == ZACT_SPIN && ZL_GetSub( ZL_PredictedState() ) );
+
+	float now = gEngfuncs.GetClientTime();
+	if ( shown < 0 || now < tick || now - tick > 1.0f )
+	{
+		shown = g_zl.magic;
+		tick = now;
+	}
+	while ( now - tick >= 1.0f / ZL_FPS )
+	{
+		tick += 1.0f / ZL_FPS;
+		if ( shown < g_zl.magic )
+			shown = min( g_zl.magic, shown + 4 );
+		else if ( shown > g_zl.magic )
+			shown = max( g_zl.magic, shown - 2 );
+
+		if ( flash )
+		{
+			const int *target = borderColors[borderIndices[borderStep]];
+			for ( int c = 0; c < 3; c++ )
+			{
+				int change = abs( border[c] - target[c] ) / borderRatio;
+				border[c] += ( border[c] >= target[c] ) ? -change : change;
+			}
+			if ( --borderRatio == 0 )
+			{
+				for ( int c = 0; c < 3; c++ )
+					border[c] = target[c];
+				borderRatio = borderRatios[borderStep];
+				borderStep = ( borderStep + 1 ) & 3;
+			}
+		}
+		else
+		{
+			border[0] = border[1] = border[2] = 255;
+			borderRatio = 2;
+		}
+	}
 
 	float y = ( g_zl.healthCap > 10 * ZL_HEART ) ? 42.0f : 34.0f;
-	float x0 = ZDraw_X( 18.0f, ZA_LEFT );
-	float y0 = ZDraw_Y( y );
 	float s = ZDraw_Scale();
-	float w = ( g_zl.magicCap + 8 ) * s;
-	float h = 10.0f * s;
+	float cap = (float)g_zl.magicCap;
+	int fillTo = preview ? max( 0, shown - ZL_SPIN_MAGIC ) : shown;
 
-	// Frame (gMagicMeterEndTex / MidTex), dark border
-	ZDraw_Rect( x0, y0, w, h, 255, 255, 255, 230 );
-	ZDraw_Rect( x0 + s, y0 + s, w - 2 * s, h - 2 * s, 30, 30, 30, 230 );
+	if ( !g_zlSprMagic )
+	{
+		// No meter sprite: plain boxes
+		float x0 = ZDraw_X( 18.0f, ZA_LEFT ), y0 = ZDraw_Y( y + 1 );
+		ZDraw_Rect( x0, y0, ( cap + 16 ) * s, 12 * s, border[0], border[1], border[2], 230 );
+		ZDraw_Rect( x0 + s, y0 + s, ( cap + 14 ) * s, 10 * s, 100, 50, 50, 230 );
+	}
+	else
+	{
+		struct { float x, w, u0, u1; int frame; } parts[3] =
+		{
+			{ 18.0f, 8.0f, 0, 1, 0 },
+			{ 26.0f, cap, 0, 1, 2 },
+			{ 26.0f + cap, 8.0f, 1, 0, 0 },		// G_TX_MIRROR: the end the other way round
+		};
+		for ( int i = 0; i < 3; i++ )
+		{
+			float px = ZDraw_X( parts[i].x, ZA_LEFT ), py = ZDraw_Y( y );
+			ZDraw_SpriteUV( g_zlSprMagic, parts[i].frame, px, py, parts[i].w * s, 16 * s, parts[i].u0, 0, parts[i].u1, 1, 100, 50, 50, 255 );
+			ZDraw_SpriteUV( g_zlSprMagic, parts[i].frame + 1, px, py, parts[i].w * s, 16 * s, parts[i].u0, 0, parts[i].u1, 1, border[0], border[1], border[2], 255 );
+		}
+	}
 
-	// Fill R_MAGIC_FILL_COLOR (0, 200, 0)
-	float fill = g_zl.magic * s;
-	ZDraw_Rect( x0 + 4 * s, y0 + 3 * s, fill, h - 6 * s, 0, 200, 0, 255 );
+	// The fill: black, then the colour by the texture's intensity (its top 7 rows)
+	float fx = ZDraw_X( 26.0f, ZA_LEFT ), fy = ZDraw_Y( y + 3 );
+	if ( shown > 0 )
+		ZDraw_Rect( fx, fy, shown * s, 7 * s, 0, 0, 0, 255 );
+	if ( g_zlSprMagic )
+	{
+		if ( shown > fillTo )
+			ZDraw_SpriteUV( g_zlSprMagic, 4, fx + fillTo * s, fy, ( shown - fillTo ) * s, 7 * s, 0, 0, 1, 7.0f / 16.0f, 250, 250, 0, 255 );
+		if ( fillTo > 0 )
+			ZDraw_SpriteUV( g_zlSprMagic, 4, fx, fy, fillTo * s, 7 * s, 0, 0, 1, 7.0f / 16.0f, 0, 200, 0, 255 );
+	}
+	else
+	{
+		if ( shown > fillTo )
+			ZDraw_Rect( fx + fillTo * s, fy, ( shown - fillTo ) * s, 7 * s, 250, 250, 0, 255 );
+		if ( fillTo > 0 )
+			ZDraw_Rect( fx, fy, fillTo * s, 7 * s, 0, 200, 0, 255 );
+	}
 }
 
 void CHudZelda::DrawCount( int value, float right, float bottom, float h, int r, int g, int b )
@@ -697,11 +814,31 @@ void CHudZelda::DrawReticles( float time )
 	}
 }
 
-// First person bow / hookshot: OoT shows a small reticle in the middle
+// First person bow / hookshot. The hookshot has OoT's red dot where it would hit
+// (Player_DrawHookshotReticle); the bow gets a small cross in the middle.
 void CHudZelda::DrawAimCrosshair( void )
 {
 	if ( ZL_PredictedAction() != ZACT_AIM )
 		return;
+
+	int item = g_zl.cItem[min( 2, max( 0, ZL_GetSub( ZL_PredictedState() ) ) )];
+	if ( item == ZITEM_HOOKSHOT || item == ZITEM_LONGSHOT )
+	{
+		// gLinkAdultHookshotReticleDL's texture is 30 model units across, drawn at scale 0.08 out
+		// to 200 units away and bigger further off, so it keeps its size on screen from there
+		Vector dot, fwd, right, up;
+		float sx, sy, ex, ey;
+		if ( !ZCam_HookDot( dot ) )
+			return;
+		AngleVectors( v_angles, fwd, right, up );
+		float depth = max( 1.0f, DotProduct( dot - v_origin, fwd ) );
+		float size = ZL_DIST( 2.4f ) * max( 1.0f, depth / ZL_DIST( 200.0f ) );
+		if ( !ZL_ProjectToScreen( dot, &sx, &sy ) || !ZL_ProjectToScreen( dot + right * size, &ex, &ey ) )
+			return;
+		float px = max( 2.0f, sqrtf( ( ex - sx ) * ( ex - sx ) + ( ey - sy ) * ( ey - sy ) ) );
+		ZDraw_Sprite( g_zlSprHookDot, 0, sx - px * 0.5f, sy - px * 0.5f, px, px, 255, 0, 0, 255 );
+		return;
+	}
 
 	float s = ZDraw_Scale();
 	float cx = ScreenWidth * 0.5f, cy = ScreenHeight * 0.5f;

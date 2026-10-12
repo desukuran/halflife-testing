@@ -42,7 +42,9 @@ Link is played with the OoT pad layout. Every control is an ordinary bind, so a 
 | C-down | `+zbtn_cdown` | R | Item |
 | C-right | `+zbtn_cright` | F | Item |
 | C-up | `+zbtn_cup` | TAB / MOUSE3 | First person look. |
-| Mouse | – | – | Orbits the camera (`zl_cam_mouse 0` gives OoT's stick-only camera). |
+| Mouse | – | – | Orbits the camera (`zl_cam_mouse 0` gives OoT's stick-only camera). Looks around in first person. |
+
+In first person (aiming the bow or hookshot, or C-up) the stick aims instead of walking, at OoT's rates (`func_8084ABD8`). Like OoT, pushing up aims down; `zl_aim_invert 0` swaps that. The mouse aims as well.
 | Start | `zl_inventory` | – | Prints the inventory. There is no subscreen yet. |
 
 Equip items with `zl_equip <0|1|2> <item number>` (C-left, C-down, C-right; items 1 bow, 2 bombs, 3 hookshot, 4 longshot, 5 nuts). A Half-Life weapon you pick up goes onto the first empty C button. Pressing that button fires its primary attack.
@@ -63,6 +65,8 @@ Equip items with `zl_equip <0|1|2> <item number>` (C-left, C-down, C-right; item
 | `zl_drops` | 1 | Monsters drop hearts, rupees and ammo when killed. |
 | `zl_hookshot_any` | 1 | 1 = the hookshot sticks to any surface. 0 = OoT rules: only hookable surfaces, here textures with `wood`, `crate`, `hook` or `tree` in the name. |
 | `zl_start_items` | 1 | 0 = start with nothing, 1 = Kokiri Sword + Deku Shield, 2 = everything (for testing). |
+| `zl_anim_debug` | 0 | 1 = print every animation Link starts to the console (for tracking down ones that don't play). |
+| `zl_room_env` | 0 | OoT's room `environmentType`, for which fidget Link does standing still: 0 = looking around, 1 = cold (sneezing), 2 / 3 = warm / hot (wiping his brow), 4 to 6 = stretching. |
 
 ### Client
 
@@ -78,6 +82,7 @@ Equip items with `zl_equip <0|1|2> <item number>` (C-left, C-down, C-right; item
 | `zl_autobind` | 1 | The first time you play as Link the client runs `zl_binds.cfg` and sets this to 0. A mod without its own `config.cfg` inherits Half-Life's, where MOUSE2 isn't Z. |
 | `zl_cam_mouse` | 1 | The mouse orbits the camera. |
 | `zl_cam_dist` | 1 | Multiplies OoT's camera distance band (144–216). |
+| `zl_aim_invert` | 1 | First person stick aiming: 1 = OoT's (up aims down), 0 = up aims up. |
 | `zl_text_speed` | 45 | Text box characters per second. |
 | `zl_name` | Link | Player name substituted for `{NAME}` in text. |
 | `zmus_enable` | 1 | Music on or off. |
@@ -88,7 +93,9 @@ Equip items with `zl_equip <0|1|2> <item number>` (C-left, C-down, C-right; item
 
 | Command | Does |
 |---|---|
-| `zmus_play <file> [fadein seconds]` | Play a `.miniusf`, `.usf` or `.wav` (path relative to the mod folder). |
+| `zmus_play <name or file> [fadein seconds]` | Play a track by its name in `resource/zl_music.txt`, or a `.miniusf`, `.usf` or `.wav` (path relative to the mod folder). |
+| `zmus_fanfare <name or file>` | Play a fanfare once over the music (`Audio_PlayFanfare`); the music carries on silently under it and fades back in after. |
+| `zmus_list` / `zmus_reload` | List / reread the names in `resource/zl_music.txt`. |
 | `zmus_stop [fadeout seconds]` | Fade out the music. |
 | `zmus_info` | Print the current track, its tags and the playback position. |
 | `zmsg_test <NAME>` | Open any text box from the message database. `A|B` tries A first, then B (OoT's text when ripped, the port's own otherwise). `{TIME}` in a message prints the time. |
@@ -111,8 +118,9 @@ Equip items with `zl_equip <0|1|2> <item number>` (C-left, C-down, C-right; item
 | `item_zl_heartcontainer`, `item_zl_key`, `item_zl_bow`, `item_zl_bombbag`, `item_zl_hookshot`, `item_zl_longshot`, `item_zl_mastersword`, `item_zl_hylianshield`, `item_zl_magicmeter`, `item_zl_doubledefense` | Item_Give + the GI_* text | Each plays the item get pose, a fanfare and a text box. |
 | `zl_chest` | EnBox | Opened with A. The `item` key picks the contents; the angle is the way the latch faces; spawnflag 1 makes a small chest. With `treasure_chest.mdl` (from `make_object_models.py`) it is OoT's slow chest: Link steps up and plays `link_demo_Tbox_open`, the lid opens at 1.5x with the latch click (frame 30) and creak (frame 90), the light comes out, and the camera is `Camera_Demo3`. Then he holds the item up (`link_demo_get_itemA`). Without the model it is a weapon box that pops open. |
 | `zl_sign`, `func_zl_sign` | EnKanban | Read with A (Check). |
+| `zl_grass` | En_Kusa | `type` 0: a bush, solid, leaves its stump and drops from OoT's table 0 (rupees, hearts, magic, arrows, or whatever Link is short of). `type` 1: a tuft of grass to walk through, gone when cut, drops a heart or arrows half the time. The sword, spins, bombs and arrows cut them. Models from `make_object_models.py` (`bush.mdl`, `bush_stump.mdl`, `grass.mdl`). |
 | `trigger_zmessage` | – | Shows a text box. When it closes, `target` fires with USE_ON for the first choice and USE_OFF otherwise. |
-| `ambient_zmusic` | Audio_QueueSeqCmd | Plays music on map start or when triggered. Keys: `track`, `fadein`, `fadeout`, `volume`. Flags: 1 = play on start, 2 = no loop, 4 = toggle. |
+| `ambient_zmusic` | Audio_QueueSeqCmd | Plays music on map start or when triggered. Keys: `track` (a name from `resource/zl_music.txt` or a file), `fadein`, `fadeout`, `volume`. Flags: 1 = play on start, 2 = no loop, 4 = toggle. |
 | `trigger_zmusic_stop` | – | Fades the music out. |
 | `monster_gossip_stone` | En_Gs | Z-targetable; A reads it. Sword: "boing", a wobble, then it tells the time (your PC clock, since Half-Life has none). Arrows and bullets: it rocks. Crushing: flattened for 5 seconds. Fire, shock or energy: it spins up and stretches. A bomb: it counts down, smokes and blasts off into the ceiling. Model from `make_object_models.py` (a Half-Life rock until you build it). |
 | any `monster_*` + `message` key | – | Link reads that message when he talks to it. Scientists and guards without a `message` key use the `SC_*` / `BA_*` pools. |
@@ -152,8 +160,14 @@ tools/zelda/       sprite/font generator, test map generator, decomp ripper, sfx
 - **OoT timing.** OoT runs at 20 Hz, and `Actor_UpdatePos` moves an actor by `velocity × 1.5` per frame. `zl_shared.h` converts with `ZL_VEL`, `ZL_ACC` and `ZL_FRAMES`, using 1 OoT unit = 72/68 HL units (Link is 68 units tall in OoT and 72 in HL).
   - This gives the original numbers: run speed 6.0, acceleration 2.0, deceleration 1.5, gravity 1.0 per frame (about 635 u/s²) and terminal velocity 20.
 - **Prediction.** `PMZ_Think` runs inside `PM_PlayerMove`, so the client predicts it.
-  - Shared state lives in `fuser1` (facing yaw), `fuser4` (action timer), `iuser4` (action, sub-state, melee attack, combo, previous pad buttons) and `iuser3` (server flags: has target, talking, items...).
+  - Shared state lives in `fuser1` (facing yaw), `fuser2` (footstep phase), `fuser4` (action timer), `vuser3[0..1]` (the speed and yaw Link wants, OoT's `speedXZ` / `yaw`), `vuser3[2]` (the height he last stood at, `fallStartHeight`; Half-Life's weapon prediction leaves it alone in Link mode), `iuser4` (action, sub-state, melee attack, combo, previous pad buttons) and `iuser3` (server flags: has target, talking, items...).
   - These fields are added to `clientdata_t` through `zelda/delta.lst`.
+- **Walls.** Half-Life's collision clips the velocity along a wall, so pushing into one at an angle slid Link along it and turned him parallel. OoT only pushes Link's position back out and keeps his `speedXZ` and `yaw`. The port keeps them too (in `vuser3`): on the ground, a velocity that is just a clipped copy of what Link wanted is given back to the actions next move, while knockbacks and bonks are taken as they are. `Player_ProcessSceneCollision`'s speed cap is ported as well. Against a wall, the stick's speed is limited to the run speed × (angle off head on, in binang) × 0.00008, at least 0.1. So running straight at a wall stops Link facing it, ready to climb (push into it, or press A), and he only keeps real speed along it at shallow angles. Steps up to step height don't count as walls. A roll bonks only within 45° of head on (`sWorldYawToTouchedWall < 0x2000`).
+- **Ice.** On an ice floor (glass, see the floor table) the actions only set the speed and yaw Link wants, like OoT's `speedXZ` / `yaw`; his real movement follows them as in `Player_UpdateCommon` for `FLOOR_TYPE_5`. Speed steps 0.35 a frame toward the wanted speed, so he picks up speed slowly and slides on when the stick is let go (playing `NA_SE_PL_SLIP_LEVEL`). He turns `|wanted| * 700 - |speed| * 100` binang a frame (at most 1350), only while the stick is pushed, so fast runs turn wide. Pushing more than 135° against the slide brakes to a stop before he sets off the other way. Footsteps on ice follow the wanted speed, since OoT's run cycle does.
+- **Sword.** A swing that hits a wall plays `NA_SE_IT_WALL_HIT_HARD` (`_SOFT` on dirt, snow and mud; `NA_SE_IT_REFLECTION_WOOD` on wood), throws out sparks and bounces Link back at speed 14, which the swing takes back to 0 at 5 a frame (`func_80842DF4`; the server sets `ZL_STATE_RECOIL`). Spins don't hit walls. What the sword cuts sounds like `CollisionCheck_HitEffects`: monsters `NA_SE_IT_SWORD_STRIKE` with the white hit mark; machines and metal brushes `NA_SE_IT_SHIELD_BOUND` with the metal one.
+- **Spin attack.** Holding B after a swing charges it at OoT's 0.02 a frame (`unk_858`). Let go at 0.1 or more and Link spins. Past 0.15 the sword lights up blue, `NA_SE_PL_SWORD_CHARGE` rings and `NA_SE_IT_SWORD_CHARGE` hums two semitones up; past 0.85 (about 2.1 seconds) it turns orange, rings again and hums five up, and letting go is the great spin. Lighting the sword needs 2 magic (`EnMThunder`, params `0x200`): while charging, the meter shows it in yellow and its border flashes white / grey; letting go lit takes it. Without it there's no light, ring or charge sound, but he still spins. Charging starts 7 frames after the swing if B is held, and counts once he's raised the sword (2 frames). A lit spin plays `NA_SE_IT_ROLLING_CUT_LV1`, the great spin `_LV2`; before it's lit, `NA_SE_IT_ROLLING_CUT` and `NA_SE_IT_SWORD_SWING_HARD`. The lit ring also hits out to `EnMThunder`'s radius: 100 (200 for the great spin) with the Master or Biggoron Sword, half with the Kokiri Sword. The spin lasts as long as its animation (13 frames, 17 for the great spin), which does the turning.
+- **Ledges** (`Player_UpdateBgCheck`, `Player_ActionHandler_12`). A ray drops 10 past the wall face from 111 above his feet (from the highest open spot, so an opening in a wall is a ledge too); he needs room above him up to the ledge and room to stand on it. Under 41 he hops up after 3 frames of pushing; up to 59 he climbs with `link_normal_100step_up`, up to 79.4 with `150step_up`, both at playSpeed 1.3, after 6 frames of pushing or A. He's put on top at once and comes in from the edge along the animation's root; the animation raises the body 41 / 59 itself and the client draws him lower by the rest, stepping back 1.5 a frame (`shape.yOffset`). The stick lets him go in the last 4 frames. Higher ledges (jump and hang) aren't ported yet.
+- **Pickups.** Small things Link picks up bob over his head for 15 frames (`EnItem00_Collected`); bombs, arrows, nuts and magic jars lying around are OoT's billboard textures (`zl_drops.spr`, ripped) when it's there.
 - **Camera relative input.** `cmd.viewangles` is the camera direction, not Link's. Link's facing is the separate `fuser1` and turns at OoT's rates (2000 binang per frame free, 4000 when Z-targeting).
   - The client camera owns the engine view angles. The server sets the player's `angles` from the facing.
 - **Buttons.** The OoT buttons reuse unused `IN_*` bits (A = IN_JUMP, B = IN_ATTACK, Z = IN_ALT1, R = IN_DUCK, C = IN_ATTACK2 / IN_RELOAD / IN_RUN / IN_SCORE).
@@ -182,13 +196,34 @@ Outgoing damage goes the other way through `ZL_OoTDamageToHL`:
 
 Half-Life has no Link, so every action has a Half-Life `player.mdl` stand-in, and the comment names the real `gPlayerAnim_*`.
 
-If `zl_model` points at a model that has the `link_*` sequence names (see [Link's model](#links-model)), those are used automatically. Playback rate is fitted to the length of each action.
+If `zl_model` points at a model that has the `link_*` sequence names (see [Link's model](#links-model)), those are used automatically. With the Half-Life stand-ins, playback rate is fitted to the length of each action.
+
+`link.mdl` plays every animation at one frame per OoT frame, which is OoT's `PLAYER_ANIM_ADJUSTED_SPEED` (2/3 × the 1.5 frames a game frame Link's animations advance). The ones OoT plays at full speed run 1.5× (`ZL_ANIM_RATE`): the bonk, the landings, hookshot flight. The roll runs at 1.25 × 1.5, so it ends on frame 20 after about half a second, like `Player_Action_Roll`.
+
+In the air (`Player_Action_8084411C`): running off a ledge faster than 3 within 45° of where Link faces jumps (`func_8083A4A8`): the running jump when he's faster than 4 and dead ahead, the standing jump otherwise. Slower, he drops. Once he comes down under where he left the ground (`fallDistance > 0`, kept in `vuser3[2]`), or at once when he dropped, he holds the first frame of `link_normal_landing`. Landing:
+
+- out of a hop: its own landing (above)
+- a running jump that never came down past where it started: `run_jump_end`
+- locked onto an enemy: `anchor_landingR`
+- a fall of up to 80: `short_landing`; under 800 with the stick forward and nothing in his hands: a roll; otherwise `landing`
+
+Those landings play standing, until they end or Link moves off.
+
+Which set Link uses depends on what's in his hands (`sPlayerModelTypes`): with the sword and the shield out, the fighting stance (`link_normal_wait`, `link_fighter_run`, ...); with the sword put away, or out without a shield, the relaxed `*_free` ones. That covers standing, walking, running, Z-target standing and side steps, the landings, the roll and the bonk.
+
+Standing still (`Player_Action_Idle`), each idle animation plays once and `Player_ChooseNextIdleAnim` picks the next: every other one is a fidget. A fidget is 4 times in 5 one of the common four (twirling the sword and adjusting the shield only with both in hand; patting his tunic, tapping his feet), otherwise the room's own (`zl_room_env`: looking around, or sneezing, wiping his brow, stretching). At critical health he pants instead, every time. Not while Z-targeting. The fidgets make their sounds on their frames (`sFidgetAnimSfxLists`).
+
+The roll hands back to standing on frame 20 (another roll can start then; the sword can cut in from frame 15), and the rest of the roll animation plays out unless he moves off. It says "Hut!" on frame 1, steps and rolls on 6 and lands on 18 (`sRollAnimSfxList`).
+
+"Put Away" comes up on A once the sword has been out with nothing else to do for 20 frames (`putAwayCooldownTimer`).
+
+Every sword swing is two animations (`D_80854190`): the cut, played one frame a frame, and the sword coming back, at full speed (`func_8083A098`), which carries on after the attack is over until it ends or Link moves off. Locked onto an enemy he uses the `anchor_*_endR` ones. The spins and the jump attack's landing work the same way.
 
 | Action | OoT animation (link.mdl sequence) | Half-Life player.mdl stand-in | Legs |
 |---|---|---|---|
-| `ZANIM_IDLE` | `gPlayerAnim_link_normal_wait` → `link_normal_wait` | `ref_aim_crowbar` | by speed |
+| `ZANIM_IDLE` | `gPlayerAnim_link_normal_wait` → `link_normal_wait`; `link_normal_wait_free` without sword and shield; fidgets `link_*wait*_typeA..D_20f`, `_itemA..D1_20f`, `_heat1/2_20f` | `ref_aim_crowbar` | by speed |
 | `ZANIM_WALK` | `gPlayerAnim_link_normal_walk` → `link_normal_walk` | `ref_aim_crowbar` | by speed |
-| `ZANIM_RUN` | `gPlayerAnim_link_normal_run` → `link_normal_run` | `ref_aim_crowbar` | by speed |
+| `ZANIM_RUN` | `gPlayerAnim_link_fighter_run` → `link_fighter_run`; `link_normal_run_free` without sword and shield | `ref_aim_crowbar` | by speed |
 | `ZANIM_Z_IDLE` | `gPlayerAnim_link_anchor_waitR` → `link_anchor_waitR` | `crouch_aim_crowbar` | deep_idle |
 | `ZANIM_Z_SIDE_L` | `gPlayerAnim_link_anchor_side_walkL` → `link_anchor_side_walkL` | `ref_aim_crowbar` | by speed |
 | `ZANIM_Z_SIDE_R` | `gPlayerAnim_link_anchor_side_walkR` → `link_anchor_side_walkR` | `ref_aim_crowbar` | by speed |
@@ -199,7 +234,9 @@ If `zl_model` points at a model that has the `link_*` sequence names (see [Link'
 | `ZANIM_SIDEHOP_R` | `gPlayerAnim_link_fighter_Rside_jump` → `link_fighter_Rside_jump` | `jump` | full body |
 | `ZANIM_BACKFLIP` | `gPlayerAnim_link_fighter_backturn_jump` → `link_fighter_backturn_jump` | `longjump`, `jump` | full body |
 | `ZANIM_JUMP` | `gPlayerAnim_link_normal_run_jump` → `link_normal_run_jump` | `jump` | full body |
-| `ZANIM_FALL` | `gPlayerAnim_link_normal_landing_wait` → `link_normal_landing_wait` | `jump` | full body |
+| `ZANIM_FALL` | `gPlayerAnim_link_normal_landing` → `link_normal_landing`, held on its first frame | `jump` | full body |
+| `ZANIM_JUMP_NORMAL` | `gPlayerAnim_link_normal_jump` → `link_normal_jump` | `jump` | full body |
+| `ZANIM_RUN_JUMP_END`, `ZANIM_SHORT_LANDING`, `ZANIM_ANCHOR_LANDING` | `gPlayerAnim_link_normal_run_jump_end`, `_normal_short_landing`, `_anchor_landingR` | `crouch_idle` | full body |
 | `ZANIM_LAND` | `gPlayerAnim_link_normal_landing` → `link_normal_landing` | `crouch_idle` | full body |
 | `ZANIM_CLIMB` | `gPlayerAnim_link_normal_150step_up` → `link_normal_150step_up` | `crouch_idle`, `jump` | full body |
 | `ZANIM_SLASH_RIGHT` | `gPlayerAnim_link_fighter_Lside_kiru` → `link_fighter_Lside_kiru` | `ref_shoot_crowbar` | by speed |
@@ -216,6 +253,7 @@ If `zl_model` points at a model that has the `link_*` sequence names (see [Link'
 | `ZANIM_SPIN_CHARGE_WALK` | `gPlayerAnim_link_fighter_power_kiru_walk` → `link_fighter_power_kiru_walk` | `ref_aim_crowbar` | crouchrun |
 | `ZANIM_SPIN` | `gPlayerAnim_link_fighter_rolling_kiru` → `link_fighter_rolling_kiru` | `ref_shoot_crowbar` | deep_idle |
 | `ZANIM_BIG_SPIN` | `gPlayerAnim_link_fighter_Wrolling_kiru` → `link_fighter_Wrolling_kiru` | `ref_shoot_crowbar` | deep_idle |
+| `ZANIM_END_*` | after a swing: `gPlayerAnim_link_fighter_*_kiru_end`, `*_kiru_finsh_end`, `rolling_kiru_end`, `Wrolling_kiru_end`, `power_jump_kiru_end`; `link_anchor_*_endR` when locked onto an enemy | `ref_aim_crowbar` | by speed |
 | `ZANIM_SHIELD` | `gPlayerAnim_link_normal_defense_wait` → `link_normal_defense_wait` | `crouch_aim_crowbar` | crouch_idle |
 | `ZANIM_AIM_BOW` | `gPlayerAnim_link_bow_bow_wait` → `link_bow_bow_wait` | `ref_aim_bow` | deep_idle |
 | `ZANIM_AIM_HOOK` | `gPlayerAnim_link_hook_wait` → `link_hook_wait` | `ref_aim_onehanded`, `ref_aim_bow` | deep_idle |
@@ -227,29 +265,41 @@ If `zl_model` points at a model that has the `link_*` sequence names (see [Link'
 | `ZANIM_GETITEM_B` | `gPlayerAnim_link_demo_get_itemB` → `link_demo_get_itemB` (picked up; he turns to the camera) | `ref_aim_squeak`, `ref_aim_trip` | deep_idle |
 | `ZANIM_CHEST` | `gPlayerAnim_link_demo_Tbox_open` → `link_demo_Tbox_open` | `ref_aim_crowbar` | crouch_idle |
 | `ZANIM_HOP_LAND_*`, `ZANIM_FLIP_LAND*` | `gPlayerAnim_link_fighter_Lside_jump_end` / `_endL`, `Rside_jump_end` / `_endR`, `backturn_jump_end` / `_endR` (D_80853D4C; the second when locked onto an enemy) | `crouch_idle` | full body |
-| `ZANIM_PUTAWAY` | `gPlayerAnim_link_normal_fighter2free` (`free2fighter_free` without a shield) | `ref_aim_crowbar` | legs by speed |
-| `ZANIM_CARRY` | `gPlayerAnim_link_normal_carryB_wait` → `link_normal_carryB_wait` | `ref_aim_squeak`, `ref_aim_trip` | by speed |
-| `ZANIM_CARRY_WALK` | `gPlayerAnim_link_normal_carryB` → `link_normal_carryB` | `ref_aim_squeak`, `ref_aim_trip` | by speed |
+| `ZANIM_PUTAWAY` | `zl_putaway`: `gPlayerAnim_link_normal_fighter2free` (`free2fighter_free` without a shield, `zl_putaway_noshield`) over `link_normal_wait_free` legs, built by `make_link_model.py` | `ref_aim_crowbar` | full body |
+| `ZANIM_CARRY`, `_WALK`, `_RUN` | `zl_carry_wait` / `_walk` / `_run`: `gPlayerAnim_link_normal_carryB_wait` on the upper body over `link_normal_wait_free` / `walk_free` / `run_free` (`sUpperBodyLimbCopyMap`), built by `make_link_model.py`. The walk and run follow the footstep cycle. | `ref_aim_squeak`, `ref_aim_trip` | by speed |
 | `ZANIM_SWIM` | `gPlayerAnim_link_swimer_swim` → `link_swimer_swim` | `swim` | full body |
 | `ZANIM_SWIM_IDLE` | `gPlayerAnim_link_swimer_swim_wait` → `link_swimer_swim_wait` | `treadwater` | full body |
+## Sword effects
+
+`cl_dll/zl_effects.cpp` draws these with the triangle API. The trail and the spin attack go by what each Link model is showing, its sequence and bones, so every Link in view gets them. Bones are looked up by name (`L_Hand`, `R_Hand`, `Waist`): studiomdl doesn't keep OoT's limb order.
+
+- **Trail** (`EffectBlure`, `D_8085470C`): from the blade's base to its tip (the left hand's `(0, 400, 0)` to `(4000, 400, 0)`), added while a swing's weapon info is live (up to `D_80854190`'s last frame for it), each piece fading out over 4 frames. White, the base end at a quarter of the tip's alpha.
+- **Charging glow** (`gSpinAttackChargingDL`): the six sided tube along the blade, placed in the hand like `EnMThunder_Draw` and pulsing with `sSpinChargeScale`. It fades in from 0.1 to 0.15, blue, orange past 0.85; after the spin it stays 7 frames, then fades 40 a frame.
+- **Ring** (`gSpinAttack1DL` + `2DL`, or `3DL` + `4DL` for the great spin): grows from scale 0.1 to 4 (8) by `Math_SmoothStepToF(0.6, 0.8)`, follows Link's waist for 8 frames, and fades out over its last frames (`spinAttackTimer`).
+- **Light**: `EnMThunder`'s point light at the waist, yellowish, up to half while charging and full when the ring comes out. OoT's point lights only light actors, so it's a Half-Life entity light. OoT also darkens the room's fog during a spin; the port doesn't.
+- **Hit marks** (`EffectSsHitMark`): 8 frames, white with yellow edges going red when the sword cuts in, white and cyan going purple when it bounces off armour. The server sends them (`ZFx`).
+- **Sparks** (`CollisionCheck_SpawnShieldParticles`): when the sword hits a wall or the shield blocks, Half-Life's spark streaks and a short blue light.
+
+OoT draws the ring and the glow with two textures scrolling at different speeds, mixed by the colour combiner. Half-Life sprites have one 8 bit texture, so every frame the game shows is baked into the sprite, already scrolled, as an index into a palette holding the combiner's colour for `T0 + T1 / 2` (the only thing the result depends on). They're drawn additive. `make_hud_sprites.py` makes stand-ins from made up textures; `rip_from_decomp.py` bakes OoT's.
+
 ## Sound table
 
 Every sound Link makes is listed in `pm_shared/zl_sounds.h` with a Half-Life stand-in, the OoT `NA_SE_*` it replaces, and that sound's random pitch from OoT's SFX tables (`Audio_ComputeSfxFreqScale`). The random pitch applies to the stand-ins as well.
 
 Each sound plays `sound/zelda/oot/<NA_SE name>.wav` when that file exists (made by `tools/zelda/extract_sfx.py`), else its Half-Life stand-in. `zl_oot_sounds 0` forces the stand-ins. The server decides this when the map loads and precaches only what it chose; the console prints how many of each.
 
-Footsteps follow OoT's walk cycle (`func_8084029C`): one 29 frame cycle, advanced by `(speed * 0.3 + 1) * 1.5` frames a game frame (at most 7.25), with steps on frames 10 and 24. With `link.mdl` the walk, run and Z-targeting walks show that same cycle scaled to their length, so the feet match the sounds and the run speeds up with Link. The step's frequency (0.9 to 1.1) and volume come from Link's speed, and the sound adds its own random pitch on top.
+Footsteps follow OoT's walk cycle (`func_8084029C`): one 29 frame cycle, advanced by `(0.55 + 0.27 * speed) * 1.5` frames a game frame until the run animation has blended in, then `(1.2 + 0.35 * (speed - 3.7)) * 1.5` (`func_80841EE4` with the Kokiri boots' registers; side stepping while Z-targeting is `(1 + 0.3 * speed) * 1.5`, `func_80841860`), at most 7.25, with steps on frames 10 and 24. The walk turns into the run where OoT's blend between them passes half, at speed 4.53. With `link.mdl` the walk, run and Z-targeting walks show that same cycle scaled to their length, so the feet match the sounds and the run speeds up with Link. The step's frequency (0.9 to 1.1) and volume come from Link's speed, and the sound adds its own random pitch on top.
 
 Steps, jumps and landings depend on the floor (`NA_SE_PL_WALK_GROUND` / `NA_SE_PL_JUMP` / `NA_SE_PL_LAND` + `SURFACE_SFX_OFFSET_*`), taken from the Half-Life material of the texture under Link (`materials.txt`):
 
 | Half-Life material | OoT floor |
 |---|---|
-| dirt (`D`) | dirt, OoT's default |
+| dirt (`D`) | dirt, OoT's default; sand if the texture name has `SND` or `SAND` in it, grass if `GRS` or `GRASS` |
 | snow (`N`) | sand |
 | concrete, metal, tile, vent, grate, computer | stone |
 | slosh (`S`), or standing in shallow water | shallow water |
 | wood (`W`) | wood |
-| glass (`Y`) | ice |
+| glass (`Y`) | ice, and Link slides on it (see [How the movement works](#how-the-movement-works)) |
 | flesh (`F`) | Jabu-Jabu's belly |
 
 | Id | Half-Life sound (default) | OoT sound | OoT random pitch | Notes |
@@ -271,13 +321,14 @@ Steps, jumps and landings depend on the floor (`NA_SE_PL_WALK_GROUND` / `NA_SE_P
 | `ZS_PL_BODY_HIT` | `sound/common/bodydrop3.wav` | `NA_SE_PL_BODY_HIT` | – |  |
 | `ZS_PL_DAMAGE` | `sound/player/pl_pain5.wav` | `NA_SE_PL_DAMAGE` | – |  |
 | `ZS_PL_CLIMB_CLIFF` | `sound/player/pl_ladder1.wav` | `NA_SE_PL_CLIMB_CLIFF` | – |  |
+| `ZS_PL_SLIP` | `sound/player/pl_tile3.wav` | `NA_SE_PL_SLIP_LEVEL` | – | sliding on ice: held while the slide lasts, stopped when it ends |
 | `ZS_PL_WALK_GROUND` | `sound/player/pl_step1.wav` | `NA_SE_PL_WALK_GROUND` | +16% | ZS_IT_* |
 | `ZS_IT_SWORD_SWING` | `sound/weapons/cbar_miss1.wav` | `NA_SE_IT_SWORD_SWING` | +8% |  |
 | `ZS_IT_SWORD_SWING_HARD` | `sound/weapons/cbar_miss1.wav` | `NA_SE_IT_SWORD_SWING_HARD` | – |  |
-| `ZS_IT_SWORD_STRIKE` | `sound/weapons/cbar_hit1.wav` | `NA_SE_IT_SWORD_STRIKE` | – | sword on a wall: "clink" and sparks |
+| `ZS_IT_SWORD_STRIKE` | `sound/weapons/cbar_hitbod1.wav` | `NA_SE_IT_SWORD_STRIKE` | – | sword into an enemy (`CollisionCheck_SwordHitAudio`) |
 | `ZS_IT_SWORD_HIT` | `sound/weapons/cbar_hitbod1.wav` | `NA_SE_IT_SWORD_IMPACT` | +8% |  |
-| `ZS_IT_SWORD_CHARGE` | `sound/items/suitcharge1.wav` | `NA_SE_IT_SWORD_CHARGE` | – | spin attack charge loop |
-| `ZS_IT_ROLLING_CUT` | `sound/weapons/cbar_miss1.wav` | `NA_SE_IT_ROLLING_CUT` | – | spin attack release |
+| `ZS_IT_SWORD_CHARGE` | `sound/items/suitcharge1.wav` | `NA_SE_IT_SWORD_CHARGE` | – | spin attack charge hum, while the sword is lit |
+| `ZS_IT_ROLLING_CUT` | `sound/weapons/cbar_miss1.wav` | `NA_SE_IT_ROLLING_CUT` | – | spin attack without the ring |
 | `ZS_IT_SHIELD_POSTURE` | `sound/items/gunpickup1.wav` | `NA_SE_IT_SHIELD_POSTURE` | +8% |  |
 | `ZS_IT_SHIELD_REFLECT_SW` | `sound/weapons/cbar_hit2.wav` | `NA_SE_IT_SHIELD_REFLECT_SW` | +8% | blocked a hit |
 | `ZS_IT_SHIELD_BOUND` | `sound/weapons/cbar_hit2.wav` | `NA_SE_IT_SHIELD_BOUND` | +16% |  |
@@ -295,6 +346,19 @@ Steps, jumps and landings depend on the floor (`NA_SE_PL_WALK_GROUND` / `NA_SE_P
 | `ZS_IT_HOOKSHOT_REFLECT` | `sound/weapons/cbar_hit2.wav` | `NA_SE_IT_HOOKSHOT_REFLECT` | – |  |
 | `ZS_IT_DEKU_NUT` | `sound/debris/glass1.wav` | `NA_SE_IT_EXPLOSION_LIGHT` | – | Deku Nut flash |
 | `ZS_IT_PUT_AWAY` | `sound/common/wpn_hudoff.wav` | `NA_SE_PL_CHANGE_ARMS` | – | ZS_SY_* |
+| `ZS_IT_WALL_HIT_HARD` | `sound/weapons/cbar_hit1.wav` | `NA_SE_IT_WALL_HIT_HARD` | – | the clang of the sword hitting a wall |
+| `ZS_IT_WALL_HIT_SOFT` | `sound/player/pl_dirt1.wav` | `NA_SE_IT_WALL_HIT_SOFT` | – | ... a soft one |
+| `ZS_IT_SWORD_STRIKE_HARD` | `sound/weapons/cbar_hit2.wav` | `NA_SE_IT_SWORD_STRIKE_HARD` | – | something armoured |
+| `ZS_IT_REFLECTION_WOOD` | `sound/debris/wood1.wav` | `NA_SE_IT_REFLECTION_WOOD` | +16% | the sword on wood |
+| `ZS_IT_ROLLING_CUT_LV1` | `sound/weapons/cbar_miss1.wav` | `NA_SE_IT_ROLLING_CUT_LV1` | – | spin attack with the blue ring |
+| `ZS_IT_ROLLING_CUT_LV2` | `sound/weapons/cbar_miss1.wav` | `NA_SE_IT_ROLLING_CUT_LV2` | – | the great spin |
+| `ZS_PL_SWORD_CHARGE` | `sound/items/suitchargeok1.wav` | `NA_SE_PL_SWORD_CHARGE` | – | the sword lights up / turns orange |
+| `ZS_VO_SNEEZE` | `sound/common/null.wav` | `NA_SE_VO_LI_SNEEZE` | – | idle fidget, cold room |
+| `ZS_VO_SWEAT` | `sound/common/null.wav` | `NA_SE_VO_LI_SWEAT` | – | idle fidget, warm room |
+| `ZS_VO_BREATH_REST` | `sound/player/breathe1.wav` | `NA_SE_VO_LI_BREATH_REST` | +8% | idle at critical health |
+| `ZS_VO_RELAX` | `sound/common/null.wav` | `NA_SE_VO_LI_RELAX` | – | stretching |
+| `ZS_PL_CALM_HIT` | `sound/player/pl_duct3.wav` | `NA_SE_PL_CALM_HIT` | +16% | patting his tunic |
+| `ZS_IT_HAMMER_SWING` | `sound/weapons/cbar_miss1.wav` | `NA_SE_IT_HAMMER_SWING` | +8% | the idle sword twirl |
 | `ZS_SY_LOCK_ON` | `sound/buttons/blip2.wav` | `NA_SE_SY_LOCK_ON` | – |  |
 | `ZS_SY_LOCK_OFF` | `sound/common/wpn_hudoff.wav` | `NA_SE_SY_LOCK_OFF` | – |  |
 | `ZS_SY_LOCK_ON_HUMAN` | `sound/buttons/blip1.wav` | `NA_SE_SY_LOCK_ON_HUMAN` | – |  |
@@ -330,6 +394,8 @@ cp baserom.z64 baseroms/ntsc-1.0/baserom.z64
 make setup VERSION=ntsc-1.0
 ```
 
+`make setup` wants a MIPS toolchain and libxml2-dev, though the extraction itself needs neither. Without them (or without python3-venv), run the steps of the Makefile's `setup` target by hand: build `tools/assets` and `tools/audio/sampleconv`, then the `tools/*.py` extraction steps.
+
 ### HUD, font and text
 
 ```sh
@@ -339,6 +405,7 @@ python3 tools/zelda/rip_from_decomp.py --oot /path/to/oot --version ntsc-1.0
 This writes:
 
 - `zelda/sprites/oot/*.spr`: hearts, the magic bar, rupee and key icons, button and item icons, text box textures, the font, and its `zl_font.txt` widths.
+- `zelda/sprites/oot/zl_spinring_*.spr`, `zl_spincharge_*.spr`, `zl_hitmark.spr`: the spin attack's ring and glow and the hit marks (see [Sword effects](#sword-effects)).
 - `zelda/resource/zl_oot_messages.txt`: the whole English message table with `{CODES}` converted, plus `ITEM_*` aliases for the item get messages.
 
 The client prefers both over the generated stand-ins.
@@ -361,6 +428,10 @@ Envelopes, vibrato and filters are approximated or ignored. Sounds that loop unt
 `--all` renders every sound in the game. `convert_sfx.py` is still there if you'd rather convert your own recordings.
 
 ### Music
+
+`zelda/resource/zl_music.txt` names the tracks (`name loop|once "file"`, and `name = other` aliases), so maps and the game don't hardcode files. The game plays `fanfare_chest` when a chest opens (`EnBox_Open`), and `fanfare_item` / `fanfare_heart` when Link gets a major item or a heart container (`Player_Action_8084E3C4`); without the music files the item get sound plays instead. The shipped list follows the Zophar rip's file names.
+
+The player is kode54's lazyusf2 (`external/lazyusf2/VERSION.txt`); the derselbst fork bundled before never got OoT's rip past its first audio blocks, so nothing was heard.
 
 1. Drop `.miniusf` files and their `.usflib` (any OoT USF set) into `zelda/music/oot/`.
 2. Test with `zmus_play music/oot/<file>.miniusf 1`.
@@ -390,10 +461,11 @@ This converts adult Link from the decomp's extracted assets:
   - shield in hand while holding R
   - the bow or hookshot while aiming or Z-targeting with it
 - **Skins:** eyes open / half / closed, which the server cycles to blink.
+- **First person arms:** `v_link_aim.mdl`, what `Player_OverrideLimbDrawGameplayFirstPerson` draws while aiming. It has the arm limbs' first person display lists and the bow (with its string and the nocked arrow, placed where `Player_PostLimbDraw` puts them) or the hookshot. The animations are `link_bow_bow_ready` / `link_bow_bow_wait` and `link_hook_shot_ready` / `link_hook_wait`. Every frame is moved into the aiming camera's space, the way `Camera_Subj3` sets the camera for `CAM_MODE_AIM_ADULT`: 14 units behind and 3 below the head's focus point. The client shows it as the view model while aiming, with the ready animation once and then the idle loop. The view narrows to OoT's first person lens (fov 45, 58 in Half-Life terms).
 
 The output goes to `tools/zelda/build/link/` (SMD, BMP, QC, `preview.png`) and `zelda/models/player/link/link.mdl`. Both are git ignored.
 
-To compile on Windows without `--studiomdl`, run `studiomdl link.qc` from the SDK's `utils/studiomdl` build, or use Crowbar. In single player the client draws Link with the model the server set, not the `model` userinfo key.
+On Linux, `linux/build_studiomdl.sh` builds the SDK's studiomdl into `linux/release/studiomdl` (pass that as `--studiomdl`). On Windows without `--studiomdl`, run `studiomdl link.qc` and `studiomdl v_link_aim.qc` from the SDK's `utils/studiomdl` build, or use Crowbar. In single player the client draws Link with the model the server set, not the `model` userinfo key.
 
 ### Other models
 
@@ -404,7 +476,7 @@ python3 tools/zelda/make_object_models.py --oot /path/to/oot --studiomdl /path/t
 This builds other OoT objects into `zelda/models/zelda/`:
 
 - `gossip_stone.mdl` from `object_gs`, one piece. The game squashes and stretches it through the entity's `fuser1` / `fuser2`, which the client renderer applies.
-- `bomb.mdl` from `gameplay_keep`'s `gBombCapDL` / `gBombBodyDL`. The body is a flat disc the client turns to face the camera (EnBom_Draw's billboard), and its red flash is 8 skins the server steps through on OoT's timer (it pulses faster at 40, 20 and 3 frames left, then swells for the last 3). A spark sits on the fuse. Without it, bombs are Half-Life grenades with a red glow.
+- `bomb.mdl` from `gameplay_keep`'s `gBombCapDL` / `gBombBodyDL`. Held, it sits between Link's hands and 7 up (`sGetItemRefPos` + `shape.yOffset`); the client places it on the hands it just drew, since the server's copy trails a predicted Link. The body is a flat disc the client turns to face the camera (EnBom_Draw's billboard), and its red flash is 8 skins the server steps through on OoT's timer (it pulses faster at 40, 20 and 3 frames left, then swells for the last 3). A spark sits on the fuse. Without it, bombs are Half-Life grenades with a red glow.
 - `gi_*.mdl`, the get-item models from `sDrawItemTable`: bow, hookshot, longshot, bomb bag, heart container, recovery heart, small key, sword (OoT has no get-item Master Sword, so the Kokiri Sword's), Hylian Shield, magic jars, arrows, bombs, nuts and rupees. Their colours go through the RDP colour combiner per pixel (`(A - B) * C + D`, both cycles), since several are blends between two colours. When Link gets an item it spins over his head between his hands, 14 units up, like `Player_DrawGetItemImpl`; the same models replace the Half-Life stand-ins for pickups lying in the world.
 - `treasure_chest.mdl` from `object_box`: its 4 limb skeleton, the front and lid display lists where `EnBox_PostLimbDraw` draws them, and the opening animation (`gTreasureChestAnim_00024C`, read from the decomp's standard animation format) as the `open` sequence.
 
@@ -424,6 +496,8 @@ The room contains:
 - a scientist and a guard
 - a chest, signs, a door, crates and items
 - an `ambient_zmusic`
+
+`tools/zelda/make_surface_map.py` writes `zelda/maps/zl_surfaces.map` (on Linux, `linux/compile_map.sh zl_surfaces`). It has six lanes of floor (stone, dirt, sand, grass, wood and shallow water) for hearing each floor's footsteps, jumps and landings, and an ice rink with pillars for sliding. Jabu-Jabu's floor isn't there, because `halflife.wad` has no flesh texture in `materials.txt`.
 
 ## Licensing
 

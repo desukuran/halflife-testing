@@ -20,6 +20,7 @@
 
 #include "particleman.h"
 #include "tri.h"
+#include "zl_client.h"
 extern IParticleMan *g_pParticleMan;
 
 /*
@@ -57,4 +58,7 @@ void CL_DLLEXPORT HUD_DrawTransparentTriangles( void )
 
 	if ( g_pParticleMan )
 		 g_pParticleMan->Update();
+
+	// Zelda: sword trail, spin attack, hit marks
+	ZFx_Draw();
 }

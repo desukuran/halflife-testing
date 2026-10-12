@@ -12,10 +12,14 @@ if [ "$1" == "clean" ]; then
 	exit 0
 fi
 
-mkdir -p ../../game/valve/dlls ../../game/valve/cl_dlls
-make hl hl_cdll \
-	CC='"gcc -m32 -fno-delete-null-pointer-checks -fno-gnu-unique -fvisibility=hidden"' \
-	CPLUS='"g++ -m32 -std=gnu++11 -fno-delete-null-pointer-checks -fno-gnu-unique -fvisibility=hidden"' \
+# -MMD -MP: the makefiles include the .d files, so editing a header (zl_sounds.h, ...) rebuilds
+# everything that uses it.
+# The SDK makefiles also copy their output into a Valve tree (../game/valve); keep that inside
+# the build folder instead of next to the repository
+mkdir -p release/game/dlls release/game/cl_dlls
+make hl hl_cdll HL_OUTPUT_DIR="$PWD/release/game" \
+	CC='"gcc -m32 -std=gnu11 -MMD -MP -fno-delete-null-pointer-checks -fno-gnu-unique -fvisibility=hidden"' \
+	CPLUS='"g++ -m32 -std=gnu++11 -MMD -MP -fno-delete-null-pointer-checks -fno-gnu-unique -fvisibility=hidden"' \
 	CPP_LIB="-lstdc++ -ldl -lpthread"
 
 mkdir -p ../zelda/dlls ../zelda/cl_dlls

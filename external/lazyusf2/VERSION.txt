@@ -1,2 +1,6 @@
-00d19c9b1e0ae4924d395310844a94d871743c89 Wed Nov 26 21:48:22 2025 +0100
-Source: https://github.com/derselbst/lazyusf2
+421f00bcaa1988b8e1825e91780129f24fbd1aa0 "Fix playback for several USFs"
+Source: https://gitlab.com/kode54/lazyusf2
+Without the x86 / x86_64 / new_dynarec recompilers, tests and project files (built as the cached
+interpreter). Local change: rsp_hle/plugin.c HleShowCFB returned a value from a void function.
+The derselbst/lazyusf2 fork that was here before never got the OoT USF rip past its first audio
+blocks (the game waited forever on its own idle loop).

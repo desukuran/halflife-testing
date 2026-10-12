@@ -22,6 +22,7 @@
 #include "decals.h"
 #include "soundent.h"
 #include "zl_player.h"
+#include "animation.h"
 
 #include <math.h>
 #include <ctype.h>
@@ -252,7 +253,9 @@ void CZeldaBomb::FuseThink( void )
 	if ( pHolder )
 	{
 		// Between Link's hands over his head (PLAYER_STATE1_CARRYING_ACTOR: the held actor sits
-		// at sGetItemRefPos), the bomb's centre 7 units above that
+		// at sGetItemRefPos), the bomb's centre 7 units above that (shape.yOffset 700). Only
+		// roughly: the server poses link.mdl without the client's prediction and leg blending,
+		// so the client draws it at the hands it actually drew (pev->playerclass = holder).
 		CLinkPlayer *pLink = ZL_GetLink( pHolder );
 		Vector hands;
 		if ( m_fOoT && pLink && pLink->ZHandsMidpoint( hands ) )
@@ -399,7 +402,6 @@ LINK_ENTITY_TO_CLASS( zl_hookshot, CZeldaHookshot );
 
 // ArmsHook_Shoot: speed 20 per frame, 13 frames (26 for the Longshot)
 #define ZL_HOOK_SPEED		ZL_VEL( 20.0f )
-#define ZL_HOOK_RANGE		ZL_DIST( 20.0f * ZL_POS_RATE * 13.0f )
 #define ZL_HOOK_FLY_SPEED	700.0f
 
 void CZeldaHookshot::Spawn( void )
@@ -731,7 +733,7 @@ BOOL CLinkPlayer::ZItemAimable( int item )
 {
 	switch ( item )
 	{
-	case ZITEM_BOW:			return m_ZInv.ammo[ZITEM_BOW] > 0;
+	case ZITEM_BOW:			return TRUE;
 	case ZITEM_HOOKSHOT:
 	case ZITEM_LONGSHOT:	return m_hZHookshot == NULL;
 	default:				return FALSE;
@@ -752,17 +754,22 @@ int CLinkPlayer::ZItemAmmo( int item )
 	}
 }
 
-// link.mdl bones 15 (L_Hand) and 18 (R_Hand), posed at Link's facing: the server's angles are
-// the camera's, the client draws him at fuser1 (ZL_LocalLinkFacing)
+// link.mdl's L_Hand and R_Hand bones, posed at Link's facing: the server's angles are the
+// camera's, the client draws him at fuser1 (ZL_LocalLinkFacing)
 BOOL CLinkPlayer::ZHandsMidpoint( Vector &out )
 {
 	if ( !strstr( STRING( pev->model ), "/link/" ) )
 		return FALSE;
 
+	void *pmodel = GET_MODEL_PTR( ENT( pev ) );
+	int lhand = LookupBone( pmodel, "L_Hand" ), rhand = LookupBone( pmodel, "R_Hand" );
+	if ( lhand < 0 || rhand < 0 )
+		return FALSE;
+
 	Vector saved = pev->angles, l, r, ang;
 	pev->angles = Vector( 0, ZFacing(), 0 );
-	GetBonePosition( 15, l, ang );
-	GetBonePosition( 18, r, ang );
+	GetBonePosition( lhand, l, ang );
+	GetBonePosition( rhand, r, ang );
 	pev->angles = saved;
 
 	out = ( l + r ) * 0.5f;
@@ -847,6 +854,7 @@ void CLinkPlayer::ZPullBomb( void )
 	pBomb->Spawn();
 	pBomb->pev->owner = edict();
 	pBomb->m_hHolder = this;
+	pBomb->pev->playerclass = entindex();	// the client puts it between his drawn hands (StudioModelRenderer.cpp)
 	pBomb->pev->movetype = MOVETYPE_NOCLIP;
 	pBomb->pev->solid = SOLID_NOT;
 	Vector hands;
@@ -869,6 +877,7 @@ void CLinkPlayer::ZThrowBomb( BOOL drop )
 		return;
 
 	pBomb->m_hHolder = NULL;
+	pBomb->pev->playerclass = 0;
 	pBomb->pev->movetype = MOVETYPE_BOUNCE;
 	pBomb->pev->solid = SOLID_BBOX;
 
@@ -937,11 +946,8 @@ void CLinkPlayer::ZItemButtonDown( int slot )
 	switch ( item )
 	{
 	case ZITEM_BOW:
-		if ( m_ZInv.ammo[ZITEM_BOW] <= 0 )
-		{
-			ZSound( CHAN_ITEM, ZS_SY_ERROR );
-			return;
-		}
+		// OoT aims the bow with no arrows too (only explosives, sticks and beans check their
+		// ammo up front); there's just nothing to fire
 		m_iZHeldItem = item;
 		m_iZHeldButton = slot;
 		m_flZItemTime = gpGlobals->time;
@@ -1141,8 +1147,40 @@ static const char *sPickupGI[] =
 };
 static BOOL sPickupGIExists[ARRAYSIZE( sPickupGI )];
 
+// EnItem00_DrawCollectible: bombs, arrows, nuts and magic jars lying around are billboards
+// (sItemDropTex, ripped into zl_drops.spr), at their actor scale over gItemDropVtx (500 square)
+// and lifted by shape.yOffset
+#define ZL_DROPS_SPRITE		"sprites/oot/zl_drops.spr"
+static BOOL sDropsSprite;
+
+struct zl_drop_sprite_t { int type; int frame; float scale; float yOffset; };
+static const zl_drop_sprite_t sDropSprites[] =
+{
+	{ ZPICK_BOMBS,			1, 0.03f, 320.0f },		// ITEM00_BOMBS_A
+	{ ZPICK_ARROWS,			2, 0.035f, 250.0f },	// ITEM00_ARROWS_SMALL
+	{ ZPICK_NUTS,			6, 0.03f, 320.0f },
+	{ ZPICK_MAGIC_LARGE,	8, 0.045f, 320.0f },
+	{ ZPICK_MAGIC_SMALL,	9, 0.03f, 320.0f },
+};
+
+static const zl_drop_sprite_t *ZL_DropSprite( int type )
+{
+	if ( !sDropsSprite )
+		return NULL;
+	for ( int i = 0; i < (int)ARRAYSIZE( sDropSprites ); i++ )
+	{
+		if ( sDropSprites[i].type == type )
+			return &sDropSprites[i];
+	}
+	return NULL;
+}
+
 static void ZL_PrecacheGetItemModels( void )
 {
+	sDropsSprite = ZL_FileExists( ZL_DROPS_SPRITE );
+	if ( sDropsSprite )
+		PRECACHE_MODEL( (char *)ZL_DROPS_SPRITE );
+
 	for ( int i = 0; i < (int)ARRAYSIZE( sPickupGI ); i++ )
 	{
 		sPickupGIExists[i] = ZL_FileExists( sPickupGI[i] );
@@ -1216,10 +1254,13 @@ public:
 	void Precache( void ) {}
 	void EXPORT PickupTouch( CBaseEntity *pOther );
 	void EXPORT PickupThink( void );
+	void EXPORT CollectedThink( void );
 	BOOL Give( CLinkPlayer *pLink );
 
 	int m_iType;
 	float m_flSpawnTime;
+	EHANDLE m_hCollector;
+	int m_iCollectTimer;
 };
 
 void CZeldaPickup::Spawn( void )
@@ -1227,9 +1268,32 @@ void CZeldaPickup::Spawn( void )
 	const zl_pickup_info_t &info = sPickups[m_iType];
 
 	const char *gi = ZL_PickupGIModel( m_iType );
+	const zl_drop_sprite_t *spr = ZL_DropSprite( m_iType );
 
 	pev->movetype = MOVETYPE_TOSS;
 	pev->solid = SOLID_TRIGGER;
+
+	if ( spr )
+	{
+		SET_MODEL( ENT( pev ), ZL_DROPS_SPRITE );
+		pev->frame = spr->frame;
+		pev->scale = 500.0f * spr->scale * ZL_UNIT / 32.0f;
+		pev->rendermode = kRenderTransAlpha;
+		pev->renderamt = 255;
+		// Sits shape.yOffset above the floor
+		float lift = spr->yOffset * spr->scale * ZL_UNIT;
+		UTIL_SetSize( pev, Vector( -12, -12, -lift ), Vector( 12, 12, 24 - lift ) );
+		UTIL_SetOrigin( pev, pev->origin );
+		m_flSpawnTime = gpGlobals->time;
+		SetTouch( &CZeldaPickup::PickupTouch );
+		if ( !info.major && pev->owner != NULL )
+		{
+			SetThink( &CZeldaPickup::PickupThink );
+			pev->nextthink = gpGlobals->time + 1.0f;
+		}
+		return;
+	}
+
 	SET_MODEL( ENT( pev ), gi ? gi : info.model );
 	// The get-item models are centred on their origin: lift them off the floor
 	UTIL_SetSize( pev, Vector( -12, -12, gi ? -10 : 0 ), Vector( 12, 12, gi ? 14 : 24 ) );
@@ -1352,7 +1416,11 @@ void CZeldaPickup::PickupTouch( CBaseEntity *pOther )
 		pLink->ZSound( CHAN_ITEM, ZS_SY_GET_HEART );
 		break;
 	default:
-		pLink->ZSound( CHAN_ITEM, info.major ? ZS_SY_GET_BOXITEM : ZS_SY_GET_ITEM );
+		// Player_Action_8084E3C4: the item get fanfare (NA_BGM_HEART_GET for a heart container)
+		if ( info.major )
+			ZL_MusicFanfare( m_iType == ZPICK_HEART_CONTAINER ? "fanfare_heart" : "fanfare_item", ZS_SY_GET_BOXITEM );
+		else
+			pLink->ZSound( CHAN_ITEM, ZS_SY_GET_ITEM );
 		break;
 	}
 
@@ -1374,7 +1442,51 @@ void CZeldaPickup::PickupTouch( CBaseEntity *pOther )
 	}
 
 	SUB_UseTargets( pLink, USE_TOGGLE, 0 );
-	UTIL_Remove( this );
+
+	if ( info.major )
+	{
+		UTIL_Remove( this );
+		return;
+	}
+
+	// EnItem00_Collected: it bobs over his head for 15 frames, then goes
+	m_hCollector = pLink;
+	m_iCollectTimer = 15;
+	pev->solid = SOLID_NOT;
+	pev->movetype = MOVETYPE_NOCLIP;
+	pev->velocity = g_vecZero;
+	pev->effects &= ~EF_NODRAW;
+	pev->owner = NULL;
+	if ( m_iType == ZPICK_HEART )
+	{
+		pev->avelocity = g_vecZero;
+		pev->angles.y = 0;
+	}
+	SetTouch( NULL );
+	SetThink( &CZeldaPickup::CollectedThink );
+	CollectedThink();
+}
+
+/*
+ EnItem00_Collected: on the player, 40 + sin(despawnTimer * 15000) * despawnTimer * 0.3 above his
+ feet (20 more for adult Link), rupees still turning 960 a frame, hearts facing front
+*/
+void CZeldaPickup::CollectedThink( void )
+{
+	CBaseEntity *pLink = m_hCollector;
+	if ( !pLink || m_iCollectTimer <= 0 )
+	{
+		UTIL_Remove( this );
+		return;
+	}
+
+	float bob = sin( m_iCollectTimer * 15000.0f * ( M_PI / 32768.0f ) ) * ( m_iCollectTimer * 0.3f );
+	Vector pos = pLink->pev->origin;
+	pos.z += pLink->pev->mins.z + ZL_DIST( 40.0f + 20.0f + bob ) - pev->mins.z;
+	UTIL_SetOrigin( pev, pos );
+
+	m_iCollectTimer--;
+	pev->nextthink = gpGlobals->time + ZL_FRAMES( 1.0f );
 }
 
 #define ZL_DEFINE_PICKUP( classname, type )							\
@@ -1584,6 +1696,9 @@ void CZeldaChest::OpenThink( void )
 	else if ( m_iOpenStep == 1 && t >= ZL_CHEST_OPEN_TIME )
 	{
 		ZL_EmitSound( edict(), CHAN_ITEM, ZS_EV_CHEST_OPEN, 1, ATTN_NORM, PITCH_NORM );
+		// EnBox_Open: NA_BGM_OPEN_TRE_BOX, except for the small chests
+		if ( !( pev->spawnflags & SF_CHEST_SMALL ) )
+			ZL_MusicFanfare( "fanfare_chest", -1 );
 
 		// Demo_Tre_Lgt: the light pouring out of the chest
 		Vector light = pev->origin + Vector( 0, 0, 24 * pev->scale );

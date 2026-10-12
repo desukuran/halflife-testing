@@ -11,7 +11,7 @@ Usage:
 
 Needs Pillow (pip install pillow).
 
-Frame layouts must match cl_dll/zl_hud.h.
+Frame layouts must match cl_dll/zl_hud.h (and cl_dll/zl_effects.cpp for the sword effects).
 """
 
 import argparse
@@ -166,6 +166,41 @@ def make_white(out):
     write_spr(os.path.join(out, "zl_white.spr"), frames, SPR_INDEXALPHA, indexalpha_palette())
 
 
+# Magic meter (Magic_DrawMeter): gMagicMeterEndTex / MidTex are IA8, drawn as
+# lerp(ENVIRONMENT (100, 50, 50), PRIMITIVE (the flashing border colour), I) with alpha A; the
+# HUD draws A in the dark colour and A * I in the border colour over it. gMagicMeterFillTex is
+# lerp(black, the fill colour, I), opaque. Frames: 0 end A, 1 end A * I, 2 mid A, 3 mid A * I,
+# 4 fill I.
+def magic_frames(end_i, end_a, mid_i, mid_a, fill_i):
+    def times(a, b):
+        out = Image.new("L", a.size)
+        pa, pb, po = a.load(), b.load(), out.load()
+        for y in range(a.size[1]):
+            for x in range(a.size[0]):
+                po[x, y] = pa[x, y] * pb[x, y] // 255
+        return out
+    return [alpha_frame(end_a), alpha_frame(times(end_a, end_i)), alpha_frame(mid_a),
+            alpha_frame(times(mid_a, mid_i)), alpha_frame(fill_i)]
+
+
+def make_magic(out):
+    # A rounded cap and a strip, light rims on the dark inside, and a fill bright at the top
+    def cap(d, k):
+        d.rounded_rectangle((1 * k, 1 * k, 15 * k, 15 * k), radius=6 * k, fill=255)
+    end_a = render_l((8, 16), cap)
+    end_i = render_l((8, 16), lambda d, k: d.rounded_rectangle((1 * k, 1 * k, 15 * k, 15 * k), radius=6 * k, outline=255, width=2 * k))
+    mid_a = Image.new("L", (24, 16), 0)
+    ImageDraw.Draw(mid_a).rectangle((0, 1, 23, 14), fill=255)
+    mid_i = Image.new("L", (24, 16), 0)
+    ImageDraw.Draw(mid_i).rectangle((0, 1, 23, 2), fill=255)
+    ImageDraw.Draw(mid_i).rectangle((0, 13, 23, 14), fill=255)
+    fill = Image.new("L", (16, 16), 0)
+    for y in range(16):
+        ImageDraw.Draw(fill).line((0, y, 15, y), fill=max(0, 255 - y * 18))
+    write_spr(os.path.join(out, "zl_magic.spr"), magic_frames(end_i, end_a, mid_i, mid_a, fill),
+              SPR_INDEXALPHA, indexalpha_palette())
+
+
 def make_buttons(out):
     frames = []
     s = 64
@@ -202,6 +237,18 @@ def make_reticle(out):
     frames.append(alpha_frame(render_l((s, s), navi)))
 
     write_spr(os.path.join(out, "zl_reticle.spr"), frames, SPR_INDEXALPHA, indexalpha_palette())
+
+
+def make_hookdot(out):
+    # The hookshot's dot (Player_DrawHookshotReticle), tinted red when drawn: a soft round spot
+    s = 32
+    img = Image.new("L", (s, s), 0)
+    px = img.load()
+    for y in range(s):
+        for x in range(s):
+            d = math.hypot(x + 0.5 - s / 2, y + 0.5 - s / 2) / (s / 2)
+            px[x, y] = int(255 * max(0.0, min(1.0, (1.0 - d) * 2.5)))
+    write_spr(os.path.join(out, "zl_hookdot.spr"), [alpha_frame(img)], SPR_INDEXALPHA, indexalpha_palette())
 
 
 def make_textbox(out):
@@ -487,6 +534,214 @@ def make_font(out, font_path, header_path):
         print(f"wrote {header_path}")
 
 
+# ---------------------------------------------------------------------------
+# Sword effects (cl_dll/zl_effects.cpp)
+#
+# OoT draws these with two scrolling intensity textures mixed by the colour combiner. A
+# Half-Life sprite has one 8 bit texture, so every frame the game shows is baked here, already
+# scrolled, as an index into a palette that holds the combiner's colour (times its alpha: they
+# are drawn additive). Both the colour and the alpha only depend on T0 + T1 / 2, so one index per
+# texel is enough. rip_from_decomp.py passes OoT's own textures; without them these use made up
+# ones with the same frame layout.
+# ---------------------------------------------------------------------------
+
+# EnMThunder_Draw's PRIMITIVE colours, and the ENVIRONMENT colours of gSpinAttack1DL..4DL /
+# its charging glow
+SPIN_PRIM = {"weak": (170, 255, 255), "strong": (255, 255, 170)}
+SPIN_RING_ENV = {"weak": [(0, 0, 255), (0, 100, 255)], "strong": [(255, 0, 0), (255, 100, 0)]}
+SPIN_CHARGE_ENV = {"weak": (0, 100, 255), "strong": (255, 100, 0)}
+SPIN_CHARGE_SCROLL = {"weak": 20, "strong": 40}
+SPIN_RING_FRAMES = 15      # EnMThunder_SpinAttacking: spinAttackTimer 1 -> 0 at 1/16 a frame
+SPIN_CHARGE_FRAMES = 128   # the charging glow's scroll repeats every 128 frames
+SPIN_LEVELS = 128          # palette entries per layer
+
+
+def clamp01(v):
+    return 0.0 if v < 0.0 else (1.0 if v > 1.0 else v)
+
+
+def spin_combine(s, prim, env):
+    """gsDPSetCombineLERP(TEXEL1, PRIMITIVE, ENV_ALPHA, TEXEL0, TEXEL1, 1, ENVIRONMENT, TEXEL0,
+    PRIMITIVE, ENVIRONMENT, COMBINED, ENVIRONMENT, COMBINED, 0, PRIMITIVE, 0) with ENV_ALPHA 128:
+    s = T0 + T1 / 2. Returns the colour premultiplied by the alpha (PRIMITIVE alpha is applied
+    when drawing)."""
+    a = clamp01(s - 0.5)
+    out = []
+    for p, e in zip(prim, env):
+        c = clamp01(s - 0.5 * p / 255.0)
+        out.append(int(round((e + (p - e) * c) * a)))
+    return tuple(out)
+
+
+def spin_palette(prim, envs):
+    pal = []
+    for env in envs:
+        for i in range(SPIN_LEVELS):
+            pal.append(spin_combine(1.5 * i / (SPIN_LEVELS - 1), prim, env))
+    pal += [(0, 0, 0)] * (256 - len(pal))
+    return pal
+
+
+def spin_index(t0, t1, layer):
+    s = t0 + 0.5 * t1
+    return layer * SPIN_LEVELS + int(round(clamp01(s / 1.5) * (SPIN_LEVELS - 1)))
+
+
+def spin_ring_scrolls():
+    """(T0 offset, T1 offset) in texels for each frame the ring is drawn: spinTrailTexScroll grows
+    2 * spinAttackAlpha a frame and segment 8 scrolls 0xFF - scroll * 30 / * 20 quarter texels"""
+    out = []
+    timer, scroll = 1.0, 0.0
+    for _ in range(SPIN_RING_FRAMES):
+        timer -= 1.0 / 16.0
+        alpha = 1.0 if timer > 0.6 else timer * (5.0 / 3.0)
+        scroll += 2.0 * alpha
+        out.append(((255 - (int(scroll * 30) & 255)) / 4.0, (255 - (int(scroll * 20) & 255)) / 4.0))
+    return out
+
+
+def bake_spin_ring(out, name, t0, t1, strength):
+    """t0 / t1: 64x32 intensity textures (rows of 0..1). Frames: gSpinAttack1DL (or 3) for every
+    frame, then gSpinAttack2DL (4)."""
+    w, h = 64, 32
+    frames = []
+    for layer in range(2):
+        for off0, off1 in spin_ring_scrolls():
+            data = bytearray()
+            for y in range(h):
+                for x in range(w):
+                    a = t0[y][int(round(x - off0)) % w]
+                    b = t1[y][int(round(x - off1)) % w]
+                    data.append(spin_index(a, b, layer))
+            frames.append((w, h, bytes(data)))
+    write_spr(os.path.join(out, name), frames, SPR_ADDITIVE,
+              spin_palette(SPIN_PRIM[strength], SPIN_RING_ENV[strength]))
+
+
+def bake_spin_charge(out, name, t0, t1, strength):
+    """t0 / t1: 32x32 intensity textures. The glow is mirrored along T (G_TX_MIRROR) and its
+    texture coordinates cover twice the height, so frames are 32x64. Frame f: segment 9 is
+    Gfx_TwoTexScroll(f * 5, 0, f * 20, f * 20 (40 orange)), quarter texels masked to 0xFF."""
+    w, h = 32, 64
+    scroll = SPIN_CHARGE_SCROLL[strength]
+    frames = []
+
+    def mirror(y):
+        y %= 64
+        return y if y < 32 else 63 - y
+
+    for f in range(SPIN_CHARGE_FRAMES):
+        x0 = ((f * 5) & 255) / 4.0
+        x1 = ((f * 20) & 255) / 4.0
+        y1 = ((f * scroll) & 255) / 4.0
+        data = bytearray()
+        for y in range(h):
+            for x in range(w):
+                a = t0[mirror(y)][int(round(x - x0)) % w]
+                b = t1[mirror(int(round(y - y1)))][int(round(x - x1)) % w]
+                data.append(spin_index(a, b, 0))
+        frames.append((w, h, bytes(data)))
+    write_spr(os.path.join(out, name), frames, SPR_ADDITIVE,
+              spin_palette(SPIN_PRIM[strength], [SPIN_CHARGE_ENV[strength]]))
+
+
+# EffectSsHitMark sColors: (prim, env) at the start and the end, for EFFECT_HITMARK_WHITE / _METAL
+HITMARK_COLORS = [
+    (((255, 255, 255), (255, 255, 0)), ((255, 255, 255), (255, 0, 0))),
+    (((255, 255, 255), (0, 255, 200)), ((255, 255, 255), (150, 0, 255))),
+]
+
+
+def bake_hitmark(out, textures):
+    """textures: 8 24x24 intensity images (rows of 0..1), gEffHitMark1..8Tex. Frames 0..7 are the
+    white hit mark, 8..15 the metal one. Each frame has its own 16 palette entries: SETUPDL_61 is
+    lerp(ENVIRONMENT, PRIMITIVE, TEXEL0) with alpha TEXEL0, and EffectSsHitMark_Update moves both
+    colours toward their end values (EffectSs_LerpInv by life + 1) every frame after the first."""
+    frames = []
+    pal = []
+    for kind, ((p0, e0), (p1, e1)) in enumerate(HITMARK_COLORS):
+        prim, env = list(p0), list(e0)
+        for k in range(8):
+            life = 7 - k
+            if k != 0:
+                prim = [int(a + (b - a) / float(life + 1)) for a, b in zip(prim, p1)]
+                env = [int(a + (b - a) / float(life + 1)) for a, b in zip(env, e1)]
+            for i in range(16):
+                t = i / 15.0
+                pal.append(tuple(int(round((e + (p - e) * t) * t)) for p, e in zip(prim, env)))
+            base = (kind * 8 + k) * 16
+            tex = textures[k]
+            data = bytearray()
+            for y in range(24):
+                for x in range(24):
+                    data.append(base + int(round(clamp01(tex[y][x]) * 15)))
+            frames.append((24, 24, bytes(data)))
+    write_spr(os.path.join(out, "zl_hitmark.spr"), frames, SPR_ADDITIVE, pal)
+
+
+def noise_texture(w, h, seed, streaks):
+    """Wrapping value noise, stretched along x by streaks"""
+    import random
+    rnd = random.Random(seed)
+    gw, gh = 8, 4
+    grid = [[rnd.random() for _ in range(gw)] for _ in range(gh)]
+
+    def smooth(t):
+        return t * t * (3 - 2 * t)
+
+    rows = []
+    for y in range(h):
+        row = []
+        for x in range(w):
+            gx = x * gw / float(w)
+            gy = y * gh / float(h) * streaks
+            ix, iy = int(gx), int(gy)
+            fx, fy = smooth(gx - ix), smooth(gy - iy)
+            a = grid[iy % gh][ix % gw]
+            b = grid[iy % gh][(ix + 1) % gw]
+            c = grid[(iy + 1) % gh][ix % gw]
+            d = grid[(iy + 1) % gh][(ix + 1) % gw]
+            v = (a + (b - a) * fx) + ((c + (d - c) * fx) - (a + (b - a) * fx)) * fy
+            row.append(v)
+        rows.append(row)
+    return rows
+
+
+def make_sword_effects(out):
+    """Stand-ins with OoT's frame layout and colours, from made up textures"""
+    fire = noise_texture(64, 32, 1, 1.0)
+    magic = noise_texture(64, 32, 2, 1.0)
+    # Brighter toward the ring's outer edge (v = 1), like the real ones
+    for y in range(32):
+        for x in range(64):
+            fire[y][x] *= 0.4 + 0.8 * y / 31.0
+    bake_spin_ring(out, "zl_spinring_w.spr", fire, magic, "weak")
+    bake_spin_ring(out, "zl_spinring_s.spr", fire, magic, "strong")
+
+    c1 = noise_texture(32, 32, 3, 1.0)
+    c2 = noise_texture(32, 32, 4, 2.0)
+    bake_spin_charge(out, "zl_spincharge_b.spr", c1, c2, "weak")
+    bake_spin_charge(out, "zl_spincharge_o.spr", c1, c2, "strong")
+
+    # A star that flashes out and fades
+    marks = []
+    for k in range(8):
+        r = 4 + k * 1.3
+        fade = 1.0 - k / 8.0
+        rows = []
+        for y in range(24):
+            row = []
+            for x in range(24):
+                dx, dy = x - 11.5, y - 11.5
+                d = math.hypot(dx, dy)
+                ang = math.atan2(dy, dx)
+                spike = r * (0.55 + 0.45 * abs(math.cos(ang * 2)))
+                row.append(clamp01((spike - d) / 3.0) * fade)
+            rows.append(row)
+        marks.append(rows)
+    bake_hitmark(out, marks)
+
+
 def main():
     here = os.path.dirname(os.path.abspath(__file__))
     ap = argparse.ArgumentParser()
@@ -500,9 +755,12 @@ def main():
     make_hearts(out)
     make_buttons(out)
     make_reticle(out)
+    make_hookdot(out)
     make_textbox(out)
     make_hud_icons(out)
+    make_magic(out)
     make_item_icons(out)
+    make_sword_effects(out)
     make_font(out, args.font, os.path.normpath(args.header))
 
 

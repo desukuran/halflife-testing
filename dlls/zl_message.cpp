@@ -24,6 +24,7 @@ int gmsgZTarget = 0;
 int gmsgZText = 0;
 int gmsgZMusic = 0;
 int gmsgZItemGet = 0;
+int gmsgZFx = 0;
 
 BOOL ZL_ItemCommand( CLinkPlayer *pLink, const char *pcmd );
 
@@ -35,6 +36,20 @@ void ZL_RegisterMessages( void )
 	gmsgZText = REG_USER_MSG( ZMSG_TEXT, -1 );
 	gmsgZMusic = REG_USER_MSG( ZMSG_MUSIC, -1 );
 	gmsgZItemGet = REG_USER_MSG( ZMSG_ITEMGET, -1 );
+	gmsgZFx = REG_USER_MSG( ZMSG_FX, -1 );
+}
+
+// A hit effect (ZFX_*) for everyone who can see pos
+void ZL_SendFx( int type, const Vector &pos )
+{
+	if ( !gmsgZFx )
+		return;
+	MESSAGE_BEGIN( MSG_PVS, gmsgZFx, pos );
+		WRITE_BYTE( type );
+		WRITE_COORD( pos.x );
+		WRITE_COORD( pos.y );
+		WRITE_COORD( pos.z );
+	MESSAGE_END();
 }
 
 // What the open message was asking, so the answer can be acted on

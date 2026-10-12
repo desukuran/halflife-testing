@@ -43,6 +43,46 @@ engine_studio_api_t IEngineStudio;
 // Zelda: the player is being drawn with his own (server set) model, see ZL_PlayerModelOverride
 static int s_zlOwnModel;
 
+// Zelda: where each Link's hands were last drawn (sGetItemRefPos: between link.mdl's L_Hand and
+// R_Hand bones), and where he was, for the bomb he holds
+static vec3_t s_zlHands[MAX_CLIENTS];
+static vec3_t s_zlHandsOrigin[MAX_CLIENTS];
+static int s_zlHandsFrame[MAX_CLIENTS];
+
+// zl_effects.cpp: the sword trail and the spin attack follow each Link's sequence and bones
+void ZFx_LinkDrawn( int index, struct cl_entity_s *ent, const char *label, float frame, const float (*hand)[4], const float *waist );
+
+// link.mdl's bones by name: studiomdl orders them its own way, not like OoT's limbs
+struct zl_bones_t
+{
+	studiohdr_t *hdr;
+	int waist, lhand, rhand;
+};
+
+static int ZL_FindBone( studiohdr_t *hdr, const char *name )
+{
+	mstudiobone_t *pbones = (mstudiobone_t *)( (byte *)hdr + hdr->boneindex );
+	for ( int i = 0; i < hdr->numbones; i++ )
+	{
+		if ( !strcmp( pbones[i].name, name ) )
+			return i;
+	}
+	return -1;
+}
+
+static const zl_bones_t *ZL_LinkBones( studiohdr_t *hdr )
+{
+	static zl_bones_t cache;
+	if ( cache.hdr != hdr )
+	{
+		cache.hdr = hdr;
+		cache.waist = ZL_FindBone( hdr, "Waist" );
+		cache.lhand = ZL_FindBone( hdr, "L_Hand" );
+		cache.rhand = ZL_FindBone( hdr, "R_Hand" );
+	}
+	return &cache;
+}
+
 /*
 ====================
 Init
@@ -1216,6 +1256,17 @@ int CStudioModelRenderer::StudioDrawModel( int flags )
 	// with the billboard matrix). Its model's +X is the side that faces the viewer.
 	if ( m_pRenderModel && strstr( m_pRenderModel->name, "zelda/bomb.mdl" ) )
 	{
+		// Held (playerclass = the holder): on the hands as they were drawn, 7 up (shape.yOffset),
+		// following where he is now. The server's position trails a predicted Link.
+		int holder = m_pCurrentEntity->curstate.playerclass - 1;
+		cl_entity_t *link = ( holder >= 0 && holder < MAX_CLIENTS ) ? gEngfuncs.GetEntityByIndex( holder + 1 ) : NULL;
+		if ( link && s_zlHandsFrame[holder] && s_zlHandsFrame[holder] >= m_nFrameCount - 1 )
+		{
+			for ( int k = 0; k < 3; k++ )
+				m_pCurrentEntity->origin[k] = s_zlHands[holder][k] + link->origin[k] - s_zlHandsOrigin[holder][k];
+			m_pCurrentEntity->origin[2] += 7.0f * ( 72.0f / 68.0f );	// ZL_DIST( 7 )
+		}
+
 		float flat = sqrtf( m_vNormal[0] * m_vNormal[0] + m_vNormal[1] * m_vNormal[1] );
 		vec3_t face;
 		face[PITCH] = atan2f( -m_vNormal[2], flat ) * ( 180.0f / M_PI );		// nose up toward the eye
@@ -1792,6 +1843,14 @@ int CStudioModelRenderer::StudioDrawPlayer( int flags, entity_state_t *pplayer )
 		StudioSetUpTransform( 0 );
 	}
 
+	// Zelda: climbing a ledge Link stands on top already; he's drawn lower by what the climb
+	// animation doesn't cover (shape.yOffset)
+	if ( zlBody )
+	{
+		extern float ZL_LocalLinkDrawOffset( void );
+		(*m_protationmatrix)[2][3] -= ZL_LocalLinkDrawOffset();
+	}
+
 	if (flags & STUDIO_RENDER)
 	{
 		// see if the bounding box lets us trivially reject, also sets
@@ -1809,6 +1868,25 @@ int CStudioModelRenderer::StudioDrawPlayer( int flags, entity_state_t *pplayer )
 	StudioSetupBones( );
 	StudioSaveBones( );
 	m_pPlayerInfo->renderframe = m_nFrameCount;
+
+	const zl_bones_t *zlBones = s_zlOwnModel ? ZL_LinkBones( m_pStudioHeader ) : NULL;
+	if ( zlBones && zlBones->lhand >= 0 && zlBones->rhand >= 0 && zlBones->waist >= 0 && m_nPlayerIndex < MAX_CLIENTS )
+	{
+		// m_plighttransform is world space in both renderers
+		for ( int k = 0; k < 3; k++ )
+			s_zlHands[m_nPlayerIndex][k] = ( (*m_plighttransform)[zlBones->lhand][k][3] + (*m_plighttransform)[zlBones->rhand][k][3] ) * 0.5f;
+		VectorCopy( m_pCurrentEntity->origin, s_zlHandsOrigin[m_nPlayerIndex] );
+		s_zlHandsFrame[m_nPlayerIndex] = m_nFrameCount;
+
+		// The sword's trail and the spin attack go by the sequence and the left hand / waist
+		if ( m_pCurrentEntity->curstate.sequence >= 0 && m_pCurrentEntity->curstate.sequence < m_pStudioHeader->numseq )
+		{
+			mstudioseqdesc_t *pseqdesc = (mstudioseqdesc_t *)( (byte *)m_pStudioHeader + m_pStudioHeader->seqindex ) + m_pCurrentEntity->curstate.sequence;
+			float waist[3] = { (*m_plighttransform)[zlBones->waist][0][3], (*m_plighttransform)[zlBones->waist][1][3], (*m_plighttransform)[zlBones->waist][2][3] };
+			ZFx_LinkDrawn( m_nPlayerIndex, m_pCurrentEntity, pseqdesc->label, StudioEstimateFrame( pseqdesc ),
+				(*m_plighttransform)[zlBones->lhand], waist );
+		}
+	}
 
 	m_pPlayerInfo = NULL;
 

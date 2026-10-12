@@ -34,6 +34,7 @@ enum zl_sound_e
 	ZS_PL_BODY_HIT,
 	ZS_PL_DAMAGE,
 	ZS_PL_CLIMB_CLIFF,
+	ZS_PL_SLIP,
 
 	// Footsteps, jumps and landings, one per floor (ZL_SURF_*, in that order)
 	ZS_PL_WALK_GROUND,
@@ -85,6 +86,20 @@ enum zl_sound_e
 	ZS_IT_HOOKSHOT_REFLECT,
 	ZS_IT_DEKU_NUT,
 	ZS_IT_PUT_AWAY,
+	ZS_IT_WALL_HIT_HARD,
+	ZS_IT_WALL_HIT_SOFT,
+	ZS_IT_SWORD_STRIKE_HARD,
+	ZS_IT_REFLECTION_WOOD,
+	ZS_IT_ROLLING_CUT_LV1,
+	ZS_IT_ROLLING_CUT_LV2,
+	ZS_PL_SWORD_CHARGE,
+	ZS_VO_SNEEZE,			// idle fidgets (sFidgetAnimSfxLists)
+	ZS_VO_SWEAT,
+	ZS_VO_BREATH_REST,
+	ZS_VO_RELAX,
+	ZS_PL_CALM_HIT,
+	ZS_IT_HAMMER_SWING,
+	ZS_EV_PLANT_BROKEN,		// cutting grass (En_Kusa)
 
 	// System (NA_SE_SY_*)
 	ZS_SY_LOCK_ON,
@@ -166,6 +181,7 @@ static const zl_sound_t g_zlSounds[ZS_COUNT] =
 	{ "common/bodydrop3.wav",			"NA_SE_PL_BODY_HIT", 0, 0 },
 	{ "player/pl_pain5.wav",			"NA_SE_PL_DAMAGE", 0, 0 },
 	{ "player/pl_ladder1.wav",			"NA_SE_PL_CLIMB_CLIFF", 0, 0 },
+	{ "player/pl_tile3.wav",			"NA_SE_PL_SLIP_LEVEL", 0, 0 },		// sliding on ice, repeated while it lasts
 
 	// NA_SE_PL_WALK_GROUND + SURFACE_SFX_OFFSET_*. OoT's names for the offsets don't match what
 	// they're used for (offset 3, Jabu-Jabu's belly, is "_DIRT"; offset 10, wood, is "_LADDER").
@@ -197,10 +213,10 @@ static const zl_sound_t g_zlSounds[ZS_COUNT] =
 	// ZS_IT_*
 	{ "weapons/cbar_miss1.wav",			"NA_SE_IT_SWORD_SWING", 1, 0 },
 	{ "weapons/cbar_miss1.wav",			"NA_SE_IT_SWORD_SWING_HARD", 0, 0 },
-	{ "weapons/cbar_hit1.wav",			"NA_SE_IT_SWORD_STRIKE", 0, 0 },		// sword on a wall: "clink" and sparks
+	{ "weapons/cbar_hitbod1.wav",		"NA_SE_IT_SWORD_STRIKE", 0, 0 },		// sword into an enemy (CollisionCheck_SwordHitAudio)
 	{ "weapons/cbar_hitbod1.wav",		"NA_SE_IT_SWORD_IMPACT", 1, 0 },
-	{ "items/suitcharge1.wav",			"NA_SE_IT_SWORD_CHARGE", 0, 0 },		// spin attack charge loop
-	{ "weapons/cbar_miss1.wav",			"NA_SE_IT_ROLLING_CUT", 0, 0 },		// spin attack release
+	{ "items/suitcharge1.wav",			"NA_SE_IT_SWORD_CHARGE", 0, 0 },		// spin attack charge hum, held while it's lit
+	{ "weapons/cbar_miss1.wav",			"NA_SE_IT_ROLLING_CUT", 0, 0 },		// spin attack without the ring
 	{ "items/gunpickup1.wav",			"NA_SE_IT_SHIELD_POSTURE", 1, 0 },
 	{ "weapons/cbar_hit2.wav",			"NA_SE_IT_SHIELD_REFLECT_SW", 1, 0 },	// blocked a hit
 	{ "weapons/cbar_hit2.wav",			"NA_SE_IT_SHIELD_BOUND", 2, 0 },
@@ -218,6 +234,20 @@ static const zl_sound_t g_zlSounds[ZS_COUNT] =
 	{ "weapons/cbar_hit2.wav",			"NA_SE_IT_HOOKSHOT_REFLECT", 0, 0 },
 	{ "debris/glass1.wav",				"NA_SE_IT_EXPLOSION_LIGHT", 0, 0 },	// Deku Nut flash
 	{ "common/wpn_hudoff.wav",			"NA_SE_PL_CHANGE_ARMS", 0, 0 },
+	{ "weapons/cbar_hit1.wav",			"NA_SE_IT_WALL_HIT_HARD", 0, 0 },		// sword into a wall: the clang (func_80842DF4)
+	{ "player/pl_dirt1.wav",			"NA_SE_IT_WALL_HIT_SOFT", 0, 0 },		// ... into soft dirt
+	{ "weapons/cbar_hit2.wav",			"NA_SE_IT_SWORD_STRIKE_HARD", 0, 0 },	// hitting something armoured (ELEM_MATERIAL_UNK1)
+	{ "debris/wood1.wav",				"NA_SE_IT_REFLECTION_WOOD", 2, 0 },		// sword on wood
+	{ "weapons/cbar_miss1.wav",			"NA_SE_IT_ROLLING_CUT_LV1", 0, 0 },		// spin attack with the blue ring (EnMThunder)
+	{ "weapons/cbar_miss1.wav",			"NA_SE_IT_ROLLING_CUT_LV2", 0, 0 },		// great spin, the orange ring
+	{ "items/suitchargeok1.wav",		"NA_SE_PL_SWORD_CHARGE", 0, 0 },		// the sword lights up (Audio_PlaySwordChargeSfx)
+	{ "common/null.wav",				"NA_SE_VO_LI_SNEEZE", 0, 0 },			// idle in the cold
+	{ "common/null.wav",				"NA_SE_VO_LI_SWEAT", 0, 0 },			// idle in the heat
+	{ "player/breathe1.wav",			"NA_SE_VO_LI_BREATH_REST", 1, 0 },		// idle at critical health: panting
+	{ "common/null.wav",				"NA_SE_VO_LI_RELAX", 0, 0 },			// stretching
+	{ "player/pl_duct3.wav",			"NA_SE_PL_CALM_HIT", 2, 0 },			// patting his tunic
+	{ "weapons/cbar_miss1.wav",			"NA_SE_IT_HAMMER_SWING", 1, 0 },		// the idle sword twirl
+	{ "debris/wood3.wav",				"NA_SE_EV_PLANT_BROKEN", 1, 0 },		// grass / a bush cut
 
 	// ZS_SY_*
 	{ "buttons/blip2.wav",				"NA_SE_SY_LOCK_ON", 0, 0 },

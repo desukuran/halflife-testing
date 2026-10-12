@@ -111,6 +111,7 @@ call ..\..\filecopy.bat $(TargetDir)\$(TargetName).pdb ..\..\..\game\mod\cl_dlls
   <ItemGroup>
     <ClCompile Include="..\..\cl_dll\zl_camera.cpp" />
     <ClCompile Include="..\..\cl_dll\zl_draw.cpp" />
+    <ClCompile Include="..\..\cl_dll\zl_effects.cpp" />
     <ClCompile Include="..\..\cl_dll\zl_hud.cpp" />
     <ClCompile Include="..\..\cl_dll\zl_input.cpp" />
     <ClCompile Include="..\..\cl_dll\zl_music.cpp" />

@@ -249,6 +249,18 @@ Climb the ledges, Z-target the
 zombies, open the chest and
 talk to the scientist!
 
+@SIGN_ZL_SURFACES WOODEN BOTTOM
+{RED}Floors{BLACK}, right to left:
+stone, dirt, sand, grass,
+wood and shallow water.
+Listen to your footsteps!
+
+@SIGN_ZL_ICE WOODEN BOTTOM
+{LIGHTBLUE}Ice rink{BLACK}
+Mind your step: you'll keep
+sliding when you let go,
+and turn wide while you run.
+
 @NAVI_HEY BLUE TOP
 {SFX:NA_SE_VO_NA_HELLO_3}Hey! Listen!
 Press {YELLOW}Z{WHITE} to target things,

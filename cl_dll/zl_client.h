@@ -8,6 +8,7 @@
 *	zl_camera.cpp	the camera (z_camera.c)
 *	zl_input.cpp	N64 buttons, Z-target focus into usercmd
 *	zl_music.cpp	music through lazyusf2 + SDL2 audio
+*	zl_effects.cpp	sword trail, spin attack ring and glow, hit marks
 *
 ****/
 #ifndef ZL_CLIENT_H
@@ -95,15 +96,18 @@ float	ZDraw_Text( const char *text, float x, float y, float height, int r, int g
 void	ZDraw_SetTextYScale( float scale );
 void	ZDraw_TextShadow( const char *text, float x, float y, float height, int r, int g, int b, int a );
 struct model_s *ZDraw_LoadSprite( const char *name );
+void	ZDraw_SpriteUV( struct model_s *spr, int frame, float x, float y, float w, float h, float u0, float v0, float u1, float v1, int r, int g, int b, int a );
 
 extern struct model_s *g_zlSprWhite;
 extern struct model_s *g_zlSprFont;
 extern struct model_s *g_zlSprHeart;
 extern struct model_s *g_zlSprButton;
 extern struct model_s *g_zlSprReticle;
+extern struct model_s *g_zlSprHookDot;
 extern struct model_s *g_zlSprTextbox;
 extern struct model_s *g_zlSprHudIcons;
 extern struct model_s *g_zlSprIcons;
+extern struct model_s *g_zlSprMagic;		// meter end, end rim, middle, middle rim, fill
 
 // Frames in sprites/zl_icons.spr (tools/zelda/make_hud_sprites.py)
 enum zl_icon_e
@@ -145,6 +149,8 @@ void	ZCam_AddMouse( float yaw, float pitch );
 int		ZCam_CommandAngles( float *angles );
 float	ZCam_Letterbox( void );		// 0..32 in 240 line units
 int		ZCam_IsFirstPerson( void );
+float	ZCam_ViewPitch( void );
+int		ZCam_HookDot( float *pos );	// aiming the hookshot: where its red dot is
 
 // zl_input.cpp
 void	ZInput_Init( void );
@@ -158,10 +164,17 @@ void	ZMusic_Shutdown( void );
 void	ZMusic_Frame( float time );
 void	ZMusic_Play( const char *track, float fadein, float volume, int loop );
 void	ZMusic_Stop( float fadeout );
+int		ZMusic_Fanfare( const char *track );
 
 // zl_hud.cpp
 void	ZHud_Init( void );
 void	ZHud_VidInit( void );
 void	ZL_PlaySound( int sound, float volume );
+
+// zl_effects.cpp: sword trail, spin attack, hit effects
+void	ZFx_Init( void );
+void	ZFx_VidInit( void );
+void	ZFx_Draw( void );
+void	ZFx_LinkDrawn( int index, struct cl_entity_s *ent, const char *label, float frame, const float (*hand)[4], const float *waist );
 
 #endif // ZL_CLIENT_H

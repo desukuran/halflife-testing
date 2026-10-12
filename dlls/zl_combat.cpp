@@ -84,8 +84,9 @@ BOOL CLinkPlayer::ZTryBlock( entvars_t *pevInflictor, int bitsDamageType )
 	if ( DotProduct( delta.Normalize(), ZForward() ) < 0.34f )	// ~70 degrees either side
 		return FALSE;
 
+	// CollisionCheck_SpawnShieldParticlesMetal: the streaks and NA_SE_IT_SHIELD_REFLECT_SW
 	ZSound( CHAN_ITEM, ZS_IT_SHIELD_REFLECT_SW );
-	UTIL_Sparks( pev->origin + ZForward() * 20 + Vector( 0, 0, 10 ) );
+	ZL_SendFx( ZFX_SPARKS, pev->origin + ZForward() * 20 + Vector( 0, 0, 10 ) );
 	return TRUE;
 }
 
@@ -243,6 +244,24 @@ void CLinkPlayer::ZFallDamageThink( void )
 */
 
 // Reach of each sword from Link's centre, in HL units
+// The Half-Life material (CHAR_TEX_*) of the brush texture between start and end, 0 if none
+static char ZL_TextureType( edict_t *pHit, const Vector &start, const Vector &end )
+{
+	const char *tex = TRACE_TEXTURE( pHit ? pHit : ENT( 0 ), (float *)&start.x, (float *)&end.x );
+	char name[CBTEXTURENAMEMAX];
+
+	if ( !tex )
+		return 0;
+	// strip leading '-0' or '+0~' or '{' or '!' (as TEXTURETYPE_PlaySound does)
+	if ( *tex == '-' || *tex == '+' )
+		tex += 2;
+	if ( *tex == '{' || *tex == '!' || *tex == '~' || *tex == ' ' )
+		tex++;
+	strncpy( name, tex, sizeof( name ) - 1 );
+	name[sizeof( name ) - 1] = 0;
+	return TEXTURETYPE_Find( name );
+}
+
 static float ZL_SwordReach( int equipment )
 {
 	if ( equipment & ZEQ_SWORD_BIGGORON )
@@ -263,7 +282,7 @@ void CLinkPlayer::ZSwordSweep( float minDeg, float maxDeg, float reach, float he
 	{
 		if ( pEnt == this || pEnt->pev->takedamage == DAMAGE_NO || pEnt->pev->solid == SOLID_NOT )
 			continue;
-		if ( pEnt->pev->solid == SOLID_TRIGGER )
+		if ( pEnt->pev->solid == SOLID_TRIGGER && !FClassnameIs( pEnt->pev, "zl_grass" ) )
 			continue;
 
 		// One hit per swing per thing
@@ -324,14 +343,53 @@ void CLinkPlayer::ZSwordSweep( float minDeg, float maxDeg, float reach, float he
 		pEnt->TraceAttack( pev, hlDamage, dir, &tr, dmgBits );
 		ApplyMultiDamage( pev, pev );
 
-		if ( pEnt->Classify() != CLASS_NONE && pEnt->Classify() != CLASS_MACHINE && pEnt->MyMonsterPointer() )
-			ZSound( CHAN_ITEM, ZS_IT_SWORD_HIT );
-		else
-			ZSound( CHAN_ITEM, ZS_IT_SWORD_STRIKE );
+		// What it sounds and looks like (CollisionCheck_HitEffects, sHitInfo): things that bleed
+		// get the white hit mark and NA_SE_IT_SWORD_STRIKE; machines are COL_MATERIAL_METAL,
+		// the metal hit mark and NA_SE_IT_SHIELD_BOUND; breakable brushes go by their texture
+		// (wood: CollisionCheck_SpawnShieldParticlesWood)
+		int fx = ZFX_HITMARK_WHITE;
+		int snd = ZS_IT_SWORD_STRIKE;
+		if ( pEnt->IsBSPModel() )
+		{
+			char mat = ZL_TextureType( pEnt->edict(), center, targetCenter );
+			if ( mat == CHAR_TEX_WOOD )
+			{
+				fx = ZFX_SPARKS;
+				snd = ZS_IT_REFLECTION_WOOD;
+			}
+			else if ( mat == CHAR_TEX_METAL || mat == CHAR_TEX_VENT || mat == CHAR_TEX_GRATE || mat == CHAR_TEX_COMPUTER )
+			{
+				fx = ZFX_HITMARK_METAL;
+				snd = ZS_IT_SHIELD_BOUND;
+			}
+		}
+		else if ( pEnt->Classify() == CLASS_MACHINE )
+		{
+			fx = ZFX_HITMARK_METAL;
+			snd = ZS_IT_SHIELD_BOUND;
+		}
+
+		// On the near side of the target, at the swing's height
+		Vector flat( dir.x, dir.y, 0 );
+		Vector hitPos = targetCenter - flat.Normalize() * radius;
+		hitPos.z = center.z;
+		if ( hitPos.z < pEnt->pev->absmin.z )
+			hitPos.z = pEnt->pev->absmin.z;
+		if ( hitPos.z > pEnt->pev->absmax.z )
+			hitPos.z = pEnt->pev->absmax.z;
+
+		// Grass makes its own noise
+		if ( !FClassnameIs( pEnt->pev, "zl_grass" ) )
+		{
+			ZSound( CHAN_ITEM, snd );
+			ZL_SendFx( fx, hitPos );
+		}
 	}
 
-	// Sword on a wall: sparks and the "clink" (NA_SE_IT_SWORD_STRIKE)
-	if ( !m_fZSwingHitWorld )
+	// Sword on a wall (func_80842DF4): the light streaks and NA_SE_IT_WALL_HIT_HARD, the clang
+	// (_SOFT into soft dirt; wood is NA_SE_IT_REFLECTION_WOOD), and Link bounces back:
+	// speedXZ -14. Spins don't hit walls.
+	if ( !m_fZSwingHitWorld && ZAction() != ZACT_SPIN )
 	{
 		float mid = ( minDeg + maxDeg ) * 0.5f;
 		Vector ang( 0, facing + mid, 0 );
@@ -348,9 +406,25 @@ void CLinkPlayer::ZSwordSweep( float minDeg, float maxDeg, float reach, float he
 				const char *tex = TRACE_TEXTURE( tr.pHit, center, center + fwd * reach );
 				if ( !tex || stricmp( tex, "sky" ) )
 				{
+					char mat = ZL_TextureType( tr.pHit, center, center + fwd * reach );
+					int snd = ZS_IT_WALL_HIT_HARD;
+					if ( mat == CHAR_TEX_WOOD )
+						snd = ZS_IT_REFLECTION_WOOD;
+					else if ( mat == CHAR_TEX_DIRT || mat == CHAR_TEX_SNOW || mat == CHAR_TEX_SLOSH )
+						snd = ZS_IT_WALL_HIT_SOFT;
+
 					m_fZSwingHitWorld = TRUE;
-					UTIL_Sparks( tr.vecEndPos );
-					ZSound( CHAN_ITEM, ZS_IT_SWORD_STRIKE );
+					ZL_SendFx( ZFX_SPARKS, tr.vecEndPos + tr.vecPlaneNormal * 2 );
+					ZSound( CHAN_ITEM, snd );
+
+					// if ( speedXZ >= 0 ) speedXZ = -14; pm_zelda.c slows it back down
+					if ( ZAction() == ZACT_SLASH && DotProduct( pev->velocity, ZForward() ) >= 0 )
+					{
+						Vector back = ZForward() * -ZL_VEL( 14.0f );
+						pev->velocity.x = back.x;
+						pev->velocity.y = back.y;
+						pev->iuser4 |= ZL_STATE_RECOIL;
+					}
 				}
 			}
 		}
@@ -380,6 +454,10 @@ void CLinkPlayer::ZSwordThink( void )
 		{
 			m_iZSwingHitCount = 0;
 			m_fZSwingHitWorld = FALSE;
+
+			// Letting go of a lit spin takes its magic, once (MAGIC_STATE_CONSUME_SETUP)
+			if ( act == ZACT_SPIN && ZL_GetSub( pev->iuser4 ) )
+				ZUseMagic( ZL_SPIN_MAGIC );
 		}
 		m_iZLastSwingId = swingId;
 	}
@@ -421,13 +499,20 @@ void CLinkPlayer::ZSwordThink( void )
 		break;
 
 	case ZACT_SPIN:
-		if ( t > 0.03f && t < ZL_SPIN_TIME * 0.8f )
+		if ( t > 0.03f && t < ZL_SpinTime( mwa ) )
 		{
 			float scale = ( mwa == ZMWA_BIG_SPIN_1H ) ? 1.6f : 1.15f;
 
-			// Great spin costs magic once (Magic_RequestChange in OoT)
-			if ( mwa == ZMWA_BIG_SPIN_1H && t < 0.1f && m_iZSwingHitCount == 0 && !m_fZSwingHitWorld )
-				ZUseMagic( 12 );
+			// A lit spin also hits with EnMThunder's ring: radius scale * 25, the ring growing to
+			// scale 4 (8 for the great spin) with the Master or Biggoron Sword, 2 (4) with the
+			// Kokiri Sword
+			if ( ZL_GetSub( pev->iuser4 ) )
+			{
+				BOOL kokiri = !( m_ZInv.equipment & ( ZEQ_SWORD_MASTER | ZEQ_SWORD_BIGGORON ) );
+				float ring = ZL_DIST( 25.0f * ( kokiri ? 2.0f : 4.0f ) * ( mwa == ZMWA_BIG_SPIN_1H ? 2.0f : 1.0f ) );
+				if ( ring > reach * scale )
+					scale = ring / reach;
+			}
 
 			ZSwordSweep( -180, 180, reach * scale, 16, dmg, DMG_SLASH );
 		}

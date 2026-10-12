@@ -21,6 +21,7 @@
 #include "bench.h"
 
 #include "vgui_TeamFortressViewport.h"
+#include "zl_client.h"
 
 #define MAX_LOGO_FRAMES 56
 
@@ -88,6 +89,10 @@ void CHud::Think(void)
 	{
 		m_iFOV = gHUD.m_Spectator.GetFOV();	// default_fov->value;
 	}
+
+	// Zelda: aiming and C-up look through OoT's first person lens (Camera_Subj3, fov 45)
+	if ( ZCam_IsFirstPerson() )
+		m_iFOV = ZL_AIM_FOV;
 
 	Bench_CheckStart();
 }

@@ -29,7 +29,8 @@ What it converts (every name below is from the decomp):
                per frame Vec3s root translation, 21 Vec3s limb rotations (binary angles,
                applied Z then Y then X like Matrix_TranslateRotateZYX) and a face index.
                Sequence names are the OoT names without "gPlayerAnim_" (what zl_anim.cpp
-               looks for), at OoT's 20 frames per second.
+               looks for), at one frame per OoT frame (20 a second); zl_anim.cpp speeds up
+               the ones OoT plays faster. zl_carry_* and zl_putaway* are built from two (COMBINED).
 
 Units: Player is drawn at actor scale 0.01; 1 OoT unit = 72/68 HL units (zl_shared.h), so
 model units x 0.01 x 72/68. Y up / facing +Z becomes Z up / facing +X, and the feet go 36
@@ -90,6 +91,22 @@ BONE_NAMES = [
     "R_Shoulder", "R_Forearm", "R_Hand", "Sheath", "Torso",
 ]
 
+# First person aiming (v_link_aim.mdl). Player_OverrideLimbDrawGameplayFirstPerson draws only
+# these limbs, with their own display lists; everything else is hidden
+FP_LIMBS = [
+    (14, "gLinkAdultRightArmOutNearDL"),      # PLAYER_LIMB_L_FOREARM: sFirstPersonLeftForearmDLs
+    (15, "gLinkAdultRightHandOutNearDL"),     # PLAYER_LIMB_L_HAND: sFirstPersonLeftHandDLs
+    (16, "gLinkAdultRightShoulderNearDL"),    # PLAYER_LIMB_R_SHOULDER: sFirstPersonRightShoulderDLs
+    (17, "gLinkAdultLeftArmOutNearDL"),       # PLAYER_LIMB_R_FOREARM: sFirstPersonForearmDLs
+]
+FP_HAND_LIMB = 18                             # PLAYER_LIMB_R_HAND, a bodygroup: what Link holds
+FP_HEAD_LIMB = 10
+# Upper body animations (func_80834D2C, D_808543D4): the item comes up once, then idles
+FP_ANIMS = [
+    ("link_bow_bow_ready", False), ("link_bow_bow_wait", True),
+    ("link_hook_shot_ready", False), ("link_hook_wait", True),
+]
+
 EYE_SKINS = ["gLinkAdultEyesOpenTex", "gLinkAdultEyesHalfTex", "gLinkAdultEyesClosedTex"]
 MOUTH_TEX = "gLinkAdultMouthClosedTex"
 
@@ -135,9 +152,12 @@ def mat_to_euler(m):
 AXIS = [[0, 0, 1], [1, 0, 0], [0, 1, 0]]
 
 
-def to_hl(p):
+def to_hl(p, origin=None):
+    """origin: an OoT model space point that becomes (0, 0, 0) instead of the feet going 36 under"""
+    if origin is not None:
+        p = [p[k] - origin[k] for k in range(3)]
     q = mat_vec(AXIS, p)
-    return [q[0] * SCALE, q[1] * SCALE, q[2] * SCALE + FEET_Z]
+    return [q[0] * SCALE, q[1] * SCALE, q[2] * SCALE + (FEET_Z if origin is None else 0.0)]
 
 
 # ---------------------------------------------------------------------------------------------
@@ -642,7 +662,7 @@ def ref_world(limbs):
     return pos
 
 
-def bone_frame(limbs, rots, root_pos):
+def bone_frame(limbs, rots, root_pos, origin=None):
     """Lines of one SMD skeleton frame. rots[i] is limb i's (x, y, z) in radians."""
     lines = []
     for i, l in enumerate(limbs):
@@ -650,7 +670,7 @@ def bone_frame(limbs, rots, root_pos):
         if i == 0:
             m = mat_mul(AXIS, euler_to_mat(rx, ry, rz))
             ex, ey, ez = mat_to_euler(m)
-            t = to_hl(root_pos)
+            t = to_hl(root_pos, origin)
         else:
             ex, ey, ez = rx, ry, rz
             t = [l["joint"][k] * SCALE for k in range(3)]
@@ -666,11 +686,11 @@ def smd_header(limbs):
     return out
 
 
-def write_mesh_smd(path, limbs, tris, bank):
+def write_mesh_smd(path, limbs, tris, bank, origin=None):
     world = ref_world(limbs)
     rest = [(0.0, 0.0, 0.0)] * len(limbs)
     out = smd_header(limbs)
-    out += ["skeleton", "time 0"] + bone_frame(limbs, rest, limbs[0]["joint"]) + ["end", "triangles"]
+    out += ["skeleton", "time 0"] + bone_frame(limbs, rest, limbs[0]["joint"], origin) + ["end", "triangles"]
 
     # The texel area each material's UVs span (s / t are 10.5 fixed point texels)
     ranges = {}
@@ -698,7 +718,7 @@ def write_mesh_smd(path, limbs, tris, bank):
         rows = []
         for limb, p, n, s, t, col, lit, tgen in vs:
             wp = [world[limb][k] + p[k] for k in range(3)]
-            hp = to_hl(wp)
+            hp = to_hl(wp, origin)
             nn = mat_vec(AXIS, n)
             ln = math.sqrt(sum(c * c for c in nn)) or 1.0
             nn = [c / ln for c in nn]
@@ -739,7 +759,8 @@ def read_anim(assets, name):
     return frames
 
 
-def write_anim_smd(path, limbs, frames, keep_root_xz):
+def write_anim_smd(path, limbs, frames, keep_root_xz, origin_fn=None):
+    """origin_fn(root_pos, rots): per frame origin (see to_hl), for the first person model"""
     out = smd_header(limbs) + ["skeleton"]
     rest_xz = limbs[0]["joint"]
     for t, (root, rots, face) in enumerate(frames):
@@ -747,21 +768,187 @@ def write_anim_smd(path, limbs, frames, keep_root_xz):
         if not keep_root_xz:
             rp[0], rp[2] = rest_xz[0], rest_xz[2]
         out.append(f"time {t}")
-        out += bone_frame(limbs, rots, rp)
+        out += bone_frame(limbs, rots, rp, origin_fn(rp, rots) if origin_fn else None)
     out.append("end")
     with open(path, "w", newline="\n") as f:
         f.write("\n".join(out) + "\n")
+
+
+# Whole body sequences made of two OoT animations, the way Player_UpdateUpperBody lays an upper
+# body animation over the legs (sUpperBodyLimbCopyMap: PLAYER_LIMB_UPPER and everything under it).
+# Half-Life's gaitsequence does the same job, but these keep the legs in step with the footsteps
+# like the normal run cycle (zl_anim.cpp). The looping ones are as long as their legs, the upper
+# animation stretched over that so it still loops cleanly; the one shots (putting the sword away,
+# standing) are as long as their upper animation, over the legs from their start.
+UPPER_LIMB = 9
+COMBINED = [
+    ("zl_carry_wait", "link_normal_wait_free", "link_normal_carryB_wait", True),
+    ("zl_carry_walk", "link_normal_walk_free", "link_normal_carryB_wait", True),
+    ("zl_carry_run", "link_normal_run_free", "link_normal_carryB_wait", True),
+    ("zl_putaway", "link_normal_wait_free", "link_normal_fighter2free", False),
+    ("zl_putaway_noshield", "link_normal_wait_free", "link_normal_free2fighter_free", False),
+]
+
+
+def combine_anims(legs, upper, loop=True):
+    out = []
+    if loop:
+        for t, (root, rots, face) in enumerate(legs):
+            u = upper[t * len(upper) // len(legs)]
+            out.append((root, list(rots[:UPPER_LIMB]) + list(u[1][UPPER_LIMB:]), u[2]))
+    else:
+        for t, u in enumerate(upper):
+            root, rots, face = legs[t % len(legs)]
+            out.append((root, list(rots[:UPPER_LIMB]) + list(u[1][UPPER_LIMB:]), u[2]))
+    return out
 
 
 def wanted_animations():
     """(sequence name, loop) from dlls/zl_anim.cpp, so the model has what the game asks for."""
     src = open(os.path.join(REPO, "dlls", "zl_anim.cpp")).read()
     seen = []
-    for m in re.finditer(r'\{\s*"gPlayerAnim_(\w+)",\s*\{[^}]*\},\s*[^,]+,\s*(TRUE|FALSE)\s*\}', src):
+    for m in re.finditer(r'\{\s*"gPlayerAnim_(\w+)",\s*\{[^}]*\},\s*[^,]+,\s*(TRUE|FALSE)\s*(?:,[^}]*)?\}', src):
         name, loop = m.group(1), m.group(2) == "TRUE"
         if name not in [s for s, _ in seen]:
             seen.append((name, loop))
     return seen
+
+
+# ---------------------------------------------------------------------------------------------
+# First person model: the arms seen from the aiming camera
+# ---------------------------------------------------------------------------------------------
+def limb_pose(limbs, rots, root_pos):
+    """OoT model space (position, rotation) of every limb, like SkelAnime_DrawFlex's matrix stack"""
+    pos, rot = [], []
+    for i, l in enumerate(limbs):
+        r = euler_to_mat(*rots[i])
+        p = l["parent"]
+        if p < 0:
+            pos.append(list(root_pos))
+            rot.append(r)
+        else:
+            j = mat_vec(rot[p], l["joint"])
+            pos.append([pos[p][k] + j[k] for k in range(3)])
+            rot.append(mat_mul(rot[p], r))
+    return pos, rot
+
+
+def fp_eye(limbs, rots, root_pos):
+    """Where the aiming camera sits, in OoT model space (x 100 = OoT units, facing +Z).
+
+    Actor_GetFocus: the head limb's matrix x sPlayerFocusOffsetFromHead { 1100, -700, 0 }.
+    Camera_Subj3 with sSetNormal0ModeAimAdultData (CAM_MODE_AIM_ADULT, once settled): at is the
+    focus + atOffset (0, -3, -0.5) turned to face behind Link, so half a unit forward and 3 down;
+    the eye is eyeDist 14 behind that, at the focus pitch (0 here: Half-Life pitches the whole
+    view model with the view)."""
+    pos, rot = limb_pose(limbs, rots, root_pos)
+    off = mat_vec(rot[FP_HEAD_LIMB], [1100.0, -700.0, 0.0])
+    focus = [pos[FP_HEAD_LIMB][k] + off[k] for k in range(3)]
+    return [focus[0], focus[1] - 300.0, focus[2] + 50.0 - 1400.0]
+
+
+def fp_transform_tris(tris, offset, mtx):
+    """Moves DLRunner triangles into a limb's space: p -> offset + mtx * p (like the Matrix_Translate /
+    Matrix_RotateZYX OoT applies before drawing something in the hand)"""
+    out = []
+    for mat, vs, two_sided in tris:
+        nv = []
+        for v in vs:
+            p = mat_vec(mtx, v[1])
+            n = mat_vec(mtx, v[2])
+            nv.append((v[0], tuple(p[k] + offset[k] for k in range(3)), n) + tuple(v[3:]))
+        out.append((mat, nv, two_sided))
+    return out
+
+
+IDENTITY = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+
+
+def build_viewmodel(assets, limbs, flex, env, bank, srcdir, keep_root_motion):
+    """Writes the SMDs and QC of v_link_aim.mdl; returns the QC name, or None"""
+    rest = [(0.0, 0.0, 0.0)] * len(limbs)
+    origin = fp_eye(limbs, rest, limbs[0]["joint"])
+
+    runner = DLRunner(assets, flex, env)
+    for limb, dl in FP_LIMBS:
+        if assets.source(dl) is None:
+            print(f"  {dl} missing, no first person model")
+            return None
+        runner.run(dl, limb)
+    n = write_mesh_smd(os.path.join(srcdir, "fp_arms.smd"), limbs, runner.tris, bank, origin)
+    print(f"fp_arms.smd: {n} triangles")
+
+    # Bow: Player_PostLimbDraw draws the string at (0, -360.4, 0) in the right hand (scaled to how far
+    # the string is drawn; in first person it's fully drawn) and puts the nocked arrow (EnArrow,
+    # gArrowSkel's limb 1 sits at (-1, 0, 998)) at (398, 1419, 244) in the left hand, turned by
+    # Matrix_RotateZYX( 0x69E8, -0x5708, 0x458E )
+    hands = []
+    r = DLRunner(assets, flex, env)
+    r.run("gLinkAdultRightHandHoldingBowFirstPersonDL", FP_HAND_LIMB)
+    tris = list(r.tris)
+    r = DLRunner(assets, flex, env)
+    r.run("gLinkAdultBowStringDL", FP_HAND_LIMB)
+    tris += fp_transform_tris(r.tris, (0.0, -360.4, 0.0), IDENTITY)
+    r = DLRunner(assets, flex, env)
+    r.run("gArrowNearDL", 15)
+    arrow_rot = euler_to_mat(0x69E8 * BINANG, -0x5708 * BINANG, 0x458E * BINANG)
+    arrow = fp_transform_tris(r.tris, (-1.0, 0.0, 998.0), IDENTITY)
+    tris += fp_transform_tris(arrow, (398.0, 1419.0, 244.0), arrow_rot)
+    n = write_mesh_smd(os.path.join(srcdir, "fp_hand_bow.smd"), limbs, tris, bank, origin)
+    hands.append("fp_hand_bow")
+    print(f"fp_hand_bow.smd: {n} triangles")
+
+    r = DLRunner(assets, flex, env)
+    r.run("gLinkAdultRightHandHoldingHookshotFarDL", FP_HAND_LIMB)
+    n = write_mesh_smd(os.path.join(srcdir, "fp_hand_hookshot.smd"), limbs, r.tris, bank, origin)
+    hands.append("fp_hand_hookshot")
+    print(f"fp_hand_hookshot.smd: {n} triangles")
+
+    seqs = []
+    os.makedirs(os.path.join(srcdir, "fp_anims"), exist_ok=True)
+    for name, loop in FP_ANIMS:
+        frames = read_anim(assets, name)
+        if not frames:
+            print(f"  animation {name} not found")
+            continue
+        write_anim_smd(os.path.join(srcdir, "fp_anims", name + ".smd"), limbs, frames, keep_root_motion,
+                       lambda rp, rots: fp_eye(limbs, rots, rp))
+        seqs.append((name, loop))
+
+    qc = [
+        "// Generated by tools/zelda/make_link_model.py from your OoT ROM. Do not redistribute.",
+        '$modelname "v_link_aim.mdl"',
+        '$cd "."',
+        '$cdtexture "."',
+        "$scale 1.0",
+        "$origin 0 0 0 -90",
+        "",
+        '$body "arms" "fp_arms"',
+        '$bodygroup "hand"',
+        "{",
+    ] + [f'\tstudio "{h}"' for h in hands] + ["}", ""]
+    for name in sorted(bank.masked):
+        qc.append(f'$texrendermode "{name}" masked')
+    qc.append("")
+    for name, loop in seqs:
+        qc.append(f'$sequence "{name[:31]}" "fp_anims/{name}" fps 20' + (" loop" if loop else ""))
+    with open(os.path.join(srcdir, "v_link_aim.qc"), "w", newline="\n") as f:
+        f.write("\n".join(qc) + "\n")
+    print(f"wrote {os.path.join(srcdir, 'v_link_aim.qc')}")
+    return "v_link_aim"
+
+
+def compile_qc(smdl, srcdir, name, outdir):
+    print(f"compiling {name}.qc with {smdl}")
+    res = subprocess.run([smdl, name + ".qc"], cwd=srcdir, capture_output=True, text=True)
+    tail = (res.stdout + res.stderr).strip().split("\n")[-15:]
+    print("\n".join(tail))
+    mdl = os.path.join(srcdir, name + ".mdl")
+    if res.returncode != 0 or not os.path.exists(mdl):
+        sys.exit("studiomdl failed")
+    os.makedirs(outdir, exist_ok=True)
+    shutil.copyfile(mdl, os.path.join(outdir, name + ".mdl"))
+    print(f"wrote {os.path.join(outdir, name + '.mdl')}")
 
 
 # ---------------------------------------------------------------------------------------------
@@ -896,7 +1083,7 @@ def preview(srcdir, png_path, shots):
 # ---------------------------------------------------------------------------------------------
 def find_studiomdl(given):
     if given:
-        return given
+        return os.path.abspath(given)   # studiomdl runs in the build folder
     for name in ("studiomdl", "studiomdl.exe"):
         p = shutil.which(name)
         if p:
@@ -985,6 +1172,14 @@ def main():
             continue
         write_anim_smd(os.path.join(args.src, "anims", name + ".smd"), limbs, frames, args.keep_root_motion)
         seqs.append((name, loop, len(frames)))
+    for name, legs_name, upper_name, loop in COMBINED:
+        legs, upper = read_anim(assets, legs_name), read_anim(assets, upper_name)
+        if not legs or not upper:
+            print(f"  animation {name}: {legs_name} or {upper_name} not found")
+            continue
+        frames = combine_anims(legs, upper, loop)
+        write_anim_smd(os.path.join(args.src, "anims", name + ".smd"), limbs, frames, args.keep_root_motion)
+        seqs.append((name, loop, len(frames)))
     print(f"{len(seqs)} animations")
 
     # QC
@@ -1025,6 +1220,8 @@ def main():
         f.write("\n".join(qc) + "\n")
     print(f"wrote {os.path.join(args.src, 'link.qc')}")
 
+    fp_qc = build_viewmodel(assets, limbs, flex, env, bank, args.src, args.keep_root_motion)
+
     if args.preview:
         parts = ["body", "lhand_open", "rhand_open", "back_sword_shield"]
         shots = [(parts, None, 0)]
@@ -1037,19 +1234,12 @@ def main():
 
     smdl = find_studiomdl(args.studiomdl)
     if not smdl:
-        print("studiomdl not found: compile link.qc yourself (studiomdl link.qc, or Crowbar), then copy link.mdl to",
-              args.out)
+        print("studiomdl not found: compile link.qc and v_link_aim.qc yourself (studiomdl link.qc, or Crowbar), "
+              "then copy the .mdl files to", args.out)
         return
-    print(f"compiling with {smdl}")
-    res = subprocess.run([smdl, "link.qc"], cwd=args.src, capture_output=True, text=True)
-    tail = (res.stdout + res.stderr).strip().split("\n")[-15:]
-    print("\n".join(tail))
-    mdl = os.path.join(args.src, "link.mdl")
-    if res.returncode != 0 or not os.path.exists(mdl):
-        sys.exit("studiomdl failed")
-    os.makedirs(args.out, exist_ok=True)
-    shutil.copyfile(mdl, os.path.join(args.out, "link.mdl"))
-    print(f"wrote {os.path.join(args.out, 'link.mdl')}")
+    compile_qc(smdl, args.src, "link", args.out)
+    if fp_qc:
+        compile_qc(smdl, args.src, fp_qc, args.out)
 
 
 if __name__ == "__main__":

@@ -48,6 +48,15 @@
 #define ZL_ACCEL_STEP		2.0f				// REG(19) / 100
 #define ZL_DECEL_STEP		1.5f
 
+// The 29 frame walk cycle's step a frame (func_8084029C, before the x1.5) at OoT speed s.
+// Walking and running (func_80841EE4): REG(35) 0.55 + REG(36) 0.27 * s until the run animation is
+// fully blended in, REG(37) 0.6 * (s - REG(48) 3.7) >= 1, then 1.2 + REG(38) 0.35 * (s - 3.7).
+// Side stepping while Z-targeting (func_80841860): REG(30) 1.0 + REG(32) 0.3 * s.
+#define ZL_RUN_CYCLE_STEP( s )	( ( (s) - 3.7f ) * 0.6f < 1.0f ? 0.55f + 0.27f * (s) : 1.2f + 0.35f * ( (s) - 3.7f ) )
+#define ZL_SIDE_CYCLE_STEP( s )	( 1.0f + 0.3f * (s) )
+// Where the walk / run blend passes half: (s - 3.7) * 0.6 = 0.5
+#define ZL_RUN_ANIM_SPEED		4.53f
+
 /*
 =============================================================================
  Buttons. N64 pad -> usercmd_t button bits (in_buttons.h).
@@ -123,6 +132,7 @@ enum zl_action_e
 #define ZL_STATE_SHIELDING		0x00040000	// PLAYER_STATE1_SHIELDING
 #define ZL_STATE_ONGROUND		0x00080000	// Was on ground at the end of the last move
 #define ZL_STATE_CHARGED		0x00100000	// Spin attack fully charged
+#define ZL_STATE_RECOIL			0x00200000	// Sword bounced off a wall: speedXZ -14, slowing 5 a frame (func_80842DF4)
 #define ZL_STATE_BUTTONS_SHIFT	24			// Previous frame's N64 buttons, for edge detection
 #define ZL_STATE_BUTTONS_MASK	0xFF000000
 
@@ -152,7 +162,7 @@ enum zl_action_e
 #define ZSF_HASSWORD	0x0080
 #define ZSF_HASSHIELD	0x0100
 #define ZSF_FROZEN		0x0200	// Talking / cutscene: no input at all
-#define ZSF_MAGIC		0x0400	// Has magic for a great spin attack
+#define ZSF_MAGIC		0x0400	// Has the magic to light the spin attack (ZL_SPIN_MAGIC)
 #define ZSF_HOOKSHOT	0x0800	// Hookshot chain is out, Link can't move
 #define ZSF_SWORDOUT	0x1000	// Sword in hand (Player_GetMeleeWeaponHeld), not in its sheath
 #define ZSF_HOSTILE		0x2000	// Locked onto an enemy (PLAYER_STATE1_HOSTILE_LOCK_ON)
@@ -205,19 +215,31 @@ enum zl_mwa_e
 /*
 =============================================================================
  Timings (seconds). OoT animation lengths divided by playback speed at 20 Hz.
+
+ Link's animations advance playSpeed * R_UPDATE_RATE * 0.5 frames a game frame
+ (LinkAnimation_Once / _Loop), so 1.5 at playSpeed 1 and 1 at PLAYER_ANIM_ADJUSTED_SPEED (2/3).
 =============================================================================
 */
-#define ZL_ROLL_TIME			ZL_FRAMES( 20.0f / 1.25f )	// Player_Action_Roll ends at anim frame 20, speed 1.25
-#define ZL_ROLL_INVULN_START	ZL_FRAMES( 8.0f / 1.25f )	// Player_SetInvulnerability at frame 8
+#define ZL_ANIM_RATE			1.5f	// animation frames per OoT frame at playSpeed 1
+#define ZL_ROLL_RATE			( 1.25f * ZL_ANIM_RATE )	// Player_SetupRoll: playSpeed 1.25
+#define ZL_ROLL_TIME			ZL_FRAMES( 20.0f / ZL_ROLL_RATE )	// Player_Action_Roll ends at anim frame 20
+#define ZL_ROLL_INVULN_START	ZL_FRAMES( 8.0f / ZL_ROLL_RATE )	// Player_SetInvulnerability at frame 8
 #define ZL_ROLL_INVULN_TIME		ZL_FRAMES( 10.0f )
-#define ZL_ROLL_CHAIN_TIME		ZL_FRAMES( 15.0f / 1.25f )	// frame 15+: Player_ActionHandler_7 may chain
+#define ZL_ROLL_CHAIN_TIME		ZL_FRAMES( 15.0f / ZL_ROLL_RATE )	// frame 15+: Player_ActionHandler_7 (the sword) may cut in
 #define ZL_BONK_TIME			0.9f
 #define ZL_LAND_TIME			0.20f
 #define ZL_HARD_LAND_TIME		0.55f
-// Landing out of a hop (D_80853D4C's *_jump_end / *_jump_endR / L, at one frame per OoT frame)
-#define ZL_HOP_LAND_TIME		ZL_FRAMES( 8.0f )	// Lside_jump_end, Rside_jump_end and their L / R
-#define ZL_FLIP_LAND_TIME		ZL_FRAMES( 7.0f )	// backturn_jump_end
-#define ZL_FLIP_LAND_TIME_R		ZL_FRAMES( 12.0f )	// backturn_jump_endR (locked onto an enemy)
+// Landing out of a hop (D_80853D4C's *_jump_end / *_jump_endR / L, func_8083A098: playSpeed 1)
+#define ZL_HOP_LAND_TIME		ZL_FRAMES( 8.0f / ZL_ANIM_RATE )	// Lside_jump_end, Rside_jump_end and their L / R
+#define ZL_FLIP_LAND_TIME		ZL_FRAMES( 7.0f / ZL_ANIM_RATE )	// backturn_jump_end
+#define ZL_FLIP_LAND_TIME_R		ZL_FRAMES( 12.0f / ZL_ANIM_RATE )	// backturn_jump_endR (locked onto an enemy)
+// Landing from a fall (Player_Action_8084411C): fallDistance is how far under where he left the
+// ground he lands. Up to 80 a short landing; under 800 with the stick forward he rolls.
+#define ZL_SHORT_LANDING_DIST	ZL_DIST( 80.0f )
+#define ZL_LANDING_ROLL_DIST	ZL_DIST( 800.0f )
+// ZACT_JUMP's sub: which jump func_8083A4A8 picked
+#define ZJUMP_RUN				0	// link_normal_run_jump: speedXZ > 4 and running where he faces
+#define ZJUMP_NORMAL			1	// link_normal_jump
 // Putting the sword away (sItemChangeInfo[PLAYER_ITEM_CHG_5]: fighter2free at 1.2x, the sword
 // goes into the sheath on frame 10 of 20)
 #define ZL_PUTAWAY_RATE			( 1.2f * 1.5f )		// frames per OoT frame
@@ -227,12 +249,30 @@ enum zl_mwa_e
 #define ZL_SLASH_COMBO_TIME		0.20f	// B pressed after this chains the next swing
 #define ZL_SLASH_RECOVER_TIME	0.65f	// kiru_endR, interruptible by movement
 #define ZL_JUMPSLASH_END_TIME	0.45f
-#define ZL_SPIN_CHARGE_TIME		0.80f	// sword glows: NA_SE_IT_SWORD_CHARGE
-#define ZL_SPIN_BIG_TIME		1.60f	// great spin needs magic
-#define ZL_SPIN_TIME			0.60f
+// Charging the spin attack: unk_858 steps 0.02 a frame (func_80844E3C). Let go at 0.1 or more and
+// he spins; past 0.15 the sword lights up blue (EnMThunder, Audio_PlaySwordChargeSfx level 1),
+// past 0.85 it turns orange (level 2) and letting go is the great spin. The port keeps the great
+// spin for when Link has magic.
+// It starts once B has been held since the swing began for 7 frames (unk_844 counts down from 8,
+// Player_ActionHandler_8), and unk_858 only counts after he raises the sword: power_kiru_start
+// from frame 8 to its end at playSpeed 1, 2 frames.
+// Lighting the sword needs ZL_SPIN_MAGIC (EnMThunder: params 0x200, Magic_RequestChange
+// MAGIC_CONSUME_WAIT_PREVIEW): the meter shows it in yellow, its border flashes, and letting go
+// lit takes it. Without it there's no light, no ring and no charge sound.
+#define ZL_SPIN_MAGIC			2
+#define ZL_SPIN_CHARGE_ENTER	ZL_FRAMES( 7.0f )
+#define ZL_SPIN_CHARGE_START	ZL_FRAMES( 2.0f )
+#define ZL_SPIN_CHARGE_TIME		( ZL_SPIN_CHARGE_START + ZL_FRAMES( 0.10f / 0.02f ) )
+#define ZL_SPIN_GLOW_TIME		( ZL_SPIN_CHARGE_START + ZL_FRAMES( 0.15f / 0.02f ) )
+#define ZL_SPIN_BIG_TIME		( ZL_SPIN_CHARGE_START + ZL_FRAMES( 0.85f / 0.02f ) )
+#define ZL_SPIN_CHARGE_FREQ1	1.12246f	// sSfxSwordChargeFreqLevels: two and five semitones up
+#define ZL_SPIN_CHARGE_FREQ2	1.33484f
+// rolling_kiru (13 frames) / Wrolling_kiru (17), played one frame a frame (Player_AnimPlayOnceAdjusted)
+#define ZL_SPIN_TIME			ZL_FRAMES( 13.0f )
+#define ZL_BIG_SPIN_TIME		ZL_FRAMES( 17.0f )
+#define ZL_SpinTime( mwa )		( (mwa) == ZMWA_BIG_SPIN_1H ? ZL_BIG_SPIN_TIME : ZL_SPIN_TIME )
 #define ZL_DAMAGE_TIME			0.35f
 #define ZL_KNOCKDOWN_TIME		1.40f
-#define ZL_CLIMB_TIME			0.60f
 #define ZL_LEDGE_PUSH_TIME		ZL_FRAMES( 6.0f )	// ledgeClimbDelayTimer >= 6
 #define ZL_GETITEM_TIME			1.60f
 
@@ -244,9 +284,33 @@ enum zl_mwa_e
 #define ZL_CHEST_OPEN_TIME		ZL_FRAMES( 90.0f / 1.5f )
 #define ZL_CHEST_STAND_DIST		ZL_DIST( 29.4343f )	// Link stands this far from the chest
 
-// Ledge climbing heights (sAgeProperties[adult]: unk_18 59, unk_14 79.4)
+// Ledges (Player_UpdateBgCheck, Player_ActionHandler_12, sAgeProperties[adult]): a ray drops
+// 10 past the wall from unk_0C 111 above his feet. Under unk_1C 41 he hops up (link_normal_jump);
+// up to unk_18 59 link_normal_100step_up, up to unk_14 79.4 link_normal_150step_up, both at
+// playSpeed 1.3. He's put on top at once; the animation carries the body up 41 / 59 from below
+// and back 25 from the edge, and shape.yOffset makes up the rest, stepping back 150 model units
+// a frame (after frame 5 of 150step_up).
+#define ZL_CLIMB_MIN			ZL_DIST( 41.0f )
 #define ZL_CLIMB_LOW			ZL_DIST( 59.0f )
 #define ZL_CLIMB_MAX			ZL_DIST( 79.4f )
+#define ZL_LEDGE_CHECK			ZL_DIST( 111.0f )
+#define ZL_CLIMB_RATE			( 1.3f * 1.5f )
+#define ZL_CLIMB_BACK			ZL_DIST( 25.28f )		// 150step_up's root starts 2528 model units back
+#define ZL_ClimbRise( sub )		( (sub) ? ZL_CLIMB_LOW : ZL_CLIMB_MIN )
+#define ZL_ClimbTime( sub )		ZL_FRAMES( ( (sub) ? 44.0f : 27.0f ) / ZL_CLIMB_RATE )
+
+// How far the hookshot reaches (the longshot twice as far). The hookshot's red dot looks this far.
+#define ZL_HOOK_RANGE			ZL_DIST( 20.0f * ZL_POS_RATE * 13.0f )
+
+// Running into a wall (Player_ProcessSceneCollision): the stick's speed is capped at
+// R_RUN_SPEED_LIMIT x (angle between Link's yaw and straight into the wall, binang) x 0.00008,
+// at least 0.1, so head on he stops and at a glance he keeps most of his speed
+#define ZL_WALL_SPEED_SCALE		0.00008f
+#define ZL_WALL_SPEED_MIN		0.1f
+
+// First person aim (Camera_Subj3, sSetNormal0ModeAimAdultData / FirstPersonData): fov 45,
+// N64 vertical, which is 58 horizontal at 4:3 like Half-Life's fov
+#define ZL_AIM_FOV				58
 
 /*
 =============================================================================
@@ -330,6 +394,12 @@ enum zl_doaction_e
 #define ZMSG_TEXT		"ZText"		// message box: open / close
 #define ZMSG_MUSIC		"ZMusic"	// play / stop / fade
 #define ZMSG_ITEMGET	"ZItemGet"	// item get fanfare + icon
+#define ZMSG_FX			"ZFx"		// a hit effect: type byte, position (cl_dll/zl_effects.cpp)
+
+// ZFx types
+#define ZFX_HITMARK_WHITE	0	// EffectSsHitMark EFFECT_HITMARK_WHITE: the sword cuts into something
+#define ZFX_HITMARK_METAL	1	// EFFECT_HITMARK_METAL: it bounces off armour (CollisionCheck_HitSolid)
+#define ZFX_SPARKS			2	// CollisionCheck_SpawnShieldParticles: sword on a wall, a blocked hit
 
 // ZText commands
 #define ZTEXT_OPEN		1
@@ -340,6 +410,7 @@ enum zl_doaction_e
 #define ZMUS_STOP		2
 #define ZMUS_FADEOUT	3
 #define ZMUS_VOLUME		4
+#define ZMUS_FANFARE	5	// track = a fanfare name, loop = sound to play instead without music (255: none)
 
 // ZTarget flags
 #define ZTGT_LOCKED		0x01

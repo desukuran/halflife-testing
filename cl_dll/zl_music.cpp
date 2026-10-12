@@ -11,10 +11,19 @@
 *
 *	Output goes through its own SDL2 audio device, separate from the engine's sound.
 *
+*	Tracks have names in resource/zl_music.txt (name, loop or once, file), so maps and the game
+*	ask for "kokiri_forest" or "fanfare_chest" rather than a file. A file path works too.
+*
+*	Fanfares (Audio_PlayFanfare: opening a chest, getting an item) play over the music, which
+*	carries on silently under them and comes back when they end.
+*
 *	Console:
-*		zmus_play <file> [fade seconds]	file is relative to the mod folder, e.g.
-*										music/oot/kokiri_forest.miniusf
+*		zmus_play <name or file> [fade seconds]	file is relative to the mod folder, e.g.
+*										music/oot/06 Kokiri Forest.miniusf
+*		zmus_fanfare <name or file>
 *		zmus_stop [fade seconds]
+*		zmus_list						the names in resource/zl_music.txt
+*		zmus_reload						read resource/zl_music.txt again
 *		zmus_info
 *		zmus_volume 0..1				(multiplied by the game's MP3Volume)
 *		zmus_enable 0/1
@@ -66,12 +75,156 @@ static SDL_AudioSpec		s_spec;
 static zl_track_t			s_cur;
 static zl_track_t			s_next;		// waits for s_cur to fade out
 static int					s_haveNext;
+static zl_track_t			s_fan;		// a fanfare over s_cur
+static float				s_duck = 1.0f;	// s_cur's gain under a fanfare
+static Sint16				*s_mixBuf;
+static int					s_mixFrames;
 static float				s_masterVolume = 0.8f;
 static int					s_initialized;
 
 static cvar_t *zmus_volume;
 static cvar_t *zmus_enable;
 static cvar_t *zmus_hle;
+
+/*
+=============================================================================
+ The music list (resource/zl_music.txt)
+
+	// comment
+	name	loop|once	"file relative to the mod folder"
+	name	= other_name		an alias
+=============================================================================
+*/
+struct zl_music_entry_t
+{
+	char	name[48];
+	char	file[160];		// or the aliased name
+	int		loop;			// -1 = alias
+};
+
+#define ZMUS_MAX_LIST	256
+static zl_music_entry_t	s_list[ZMUS_MAX_LIST];
+static int				s_listCount;
+static int				s_listLoaded;
+
+static const char *ZMus_Token( const char *p, char *out, int size )
+{
+	int n = 0;
+	while ( *p == ' ' || *p == '\t' )
+		p++;
+	if ( *p == '"' )
+	{
+		p++;
+		while ( *p && *p != '"' && *p != '\n' )
+		{
+			if ( n < size - 1 )
+				out[n++] = *p;
+			p++;
+		}
+		if ( *p == '"' )
+			p++;
+	}
+	else
+	{
+		while ( *p && *p != ' ' && *p != '\t' && *p != '\n' && *p != '\r' )
+		{
+			if ( n < size - 1 )
+				out[n++] = *p;
+			p++;
+		}
+	}
+	out[n] = 0;
+	return p;
+}
+
+static void ZMus_LoadList( void )
+{
+	int length = 0;
+	s_listCount = 0;
+	s_listLoaded = 1;
+
+	char *data = (char *)gEngfuncs.COM_LoadFile( (char *)"resource/zl_music.txt", 5, &length );
+	if ( !data )
+	{
+		gEngfuncs.Con_Printf( "zmus: no resource/zl_music.txt, tracks have to be given as files\n" );
+		return;
+	}
+
+	char *copy = (char *)malloc( length + 1 );
+	memcpy( copy, data, length );
+	copy[length] = 0;
+	gEngfuncs.COM_FreeFile( data );
+
+	for ( char *line = copy; line && *line; )
+	{
+		char *next = strchr( line, '\n' );
+		if ( next )
+			*next++ = 0;
+
+		char name[48], how[160], file[160];
+		const char *p = ZMus_Token( line, name, sizeof( name ) );
+		if ( name[0] && strncmp( name, "//", 2 ) && name[0] != '#' && s_listCount < ZMUS_MAX_LIST )
+		{
+			p = ZMus_Token( p, how, sizeof( how ) );
+			zl_music_entry_t *e = &s_list[s_listCount];
+			strncpy( e->name, name, sizeof( e->name ) - 1 );
+			e->name[sizeof( e->name ) - 1] = 0;
+			if ( !strcmp( how, "=" ) )
+			{
+				ZMus_Token( p, file, sizeof( file ) );
+				e->loop = -1;
+			}
+			else
+			{
+				ZMus_Token( p, file, sizeof( file ) );
+				e->loop = !stricmp( how, "once" ) ? 0 : 1;
+			}
+			strncpy( e->file, file, sizeof( e->file ) - 1 );
+			e->file[sizeof( e->file ) - 1] = 0;
+			if ( e->file[0] )
+				s_listCount++;
+		}
+		line = next;
+	}
+	free( copy );
+}
+
+// A name from the list (following aliases), or NULL
+static const zl_music_entry_t *ZMus_Find( const char *name )
+{
+	if ( !s_listLoaded )
+		ZMus_LoadList();
+
+	for ( int depth = 0; depth < 8; depth++ )
+	{
+		const zl_music_entry_t *found = NULL;
+		for ( int i = 0; i < s_listCount; i++ )
+		{
+			if ( !stricmp( s_list[i].name, name ) )
+			{
+				found = &s_list[i];
+				break;
+			}
+		}
+		if ( !found || found->loop >= 0 )
+			return found;
+		name = found->file;
+	}
+	return NULL;
+}
+
+// What to load for a name or a file; *loop is the list's setting when it's a name
+static const char *ZMus_Resolve( const char *track, int *loop )
+{
+	const zl_music_entry_t *e = ZMus_Find( track );
+	if ( e )
+	{
+		if ( loop )
+			*loop = e->loop;
+		return e->file;
+	}
+	return track;
+}
 
 /*
 =============================================================================
@@ -312,37 +465,31 @@ static void ZMus_Render( zl_track_t *t, Sint16 *out, int frames )
 	}
 }
 
-static void SDLCALL ZMus_Callback( void *userdata, Uint8 *stream, int len )
+// Render a track, step its fade, and scale it by its gain (times extra, ramping extra0 -> extra1)
+static void ZMus_RenderGain( zl_track_t *t, Sint16 *out, int frames, float extra0, float extra1 )
 {
-	Sint16 *out = (Sint16 *)stream;
-	int frames = len / ( sizeof( Sint16 ) * ZMUS_CHANNELS );
-
-	if ( s_cur.kind == 0 )
-	{
-		memset( stream, 0, len );
-		return;
-	}
-
-	ZMus_Render( &s_cur, out, frames );
+	ZMus_Render( t, out, frames );
 
 	float seconds = (float)frames / s_spec.freq;
-	s_cur.playedSec += seconds;
+	t->playedSec += seconds;
 
 	// Non looping tracks fade out at the end of their length tag
-	if ( !s_cur.loop && s_cur.lengthSec > 0 && s_cur.playedSec >= s_cur.lengthSec && s_cur.fadeTarget > 0 )
+	if ( !t->loop && t->lengthSec > 0 && t->playedSec >= t->lengthSec && t->fadeTarget > 0 )
 	{
-		s_cur.fadeTarget = 0;
-		s_cur.fadeRate = 1.0f / 2.0f;
+		t->fadeTarget = 0;
+		t->fadeRate = 1.0f / 2.0f;
 	}
 
-	float gain0 = s_cur.fade;
-	if ( s_cur.fade < s_cur.fadeTarget )
-		s_cur.fade = min( s_cur.fadeTarget, s_cur.fade + s_cur.fadeRate * seconds );
-	else if ( s_cur.fade > s_cur.fadeTarget )
-		s_cur.fade = max( s_cur.fadeTarget, s_cur.fade - s_cur.fadeRate * seconds );
-	float gain1 = s_cur.fade;
+	float gain0 = t->fade;
+	if ( t->fade < t->fadeTarget )
+		t->fade = min( t->fadeTarget, t->fade + t->fadeRate * seconds );
+	else if ( t->fade > t->fadeTarget )
+		t->fade = max( t->fadeTarget, t->fade - t->fadeRate * seconds );
+	float gain1 = t->fade;
 
-	float vol = s_masterVolume * s_cur.volume;
+	float vol = s_masterVolume * t->volume;
+	gain0 *= extra0;
+	gain1 *= extra1;
 	for ( int i = 0; i < frames; i++ )
 	{
 		float g = vol * ( gain0 + ( gain1 - gain0 ) * ( (float)i / frames ) );
@@ -351,6 +498,38 @@ static void SDLCALL ZMus_Callback( void *userdata, Uint8 *stream, int len )
 			int v = (int)( out[i * ZMUS_CHANNELS + c] * g );
 			out[i * ZMUS_CHANNELS + c] = (Sint16)( v > 32767 ? 32767 : v < -32768 ? -32768 : v );
 		}
+	}
+}
+
+static void SDLCALL ZMus_Callback( void *userdata, Uint8 *stream, int len )
+{
+	Sint16 *out = (Sint16 *)stream;
+	int frames = len / ( sizeof( Sint16 ) * ZMUS_CHANNELS );
+	float seconds = (float)frames / s_spec.freq;
+
+	memset( stream, 0, len );
+
+	// The music ducks out under a fanfare (it keeps playing) and comes back after
+	float duck0 = s_duck;
+	if ( s_fan.kind )
+		s_duck = max( 0.0f, s_duck - seconds / 0.1f );
+	else
+		s_duck = min( 1.0f, s_duck + seconds / 0.5f );
+
+	if ( s_cur.kind )
+		ZMus_RenderGain( &s_cur, out, frames, duck0, s_duck );
+
+	if ( s_fan.kind && s_mixBuf && frames <= s_mixFrames )
+	{
+		ZMus_RenderGain( &s_fan, s_mixBuf, frames, 1.0f, 1.0f );
+		for ( int i = 0; i < frames * ZMUS_CHANNELS; i++ )
+		{
+			int v = out[i] + s_mixBuf[i];
+			out[i] = (Sint16)( v > 32767 ? 32767 : v < -32768 ? -32768 : v );
+		}
+		// A fanfare ends at its length tag (ZMusic_Frame frees it)
+		if ( s_fan.lengthSec > 0 && s_fan.playedSec >= s_fan.lengthSec )
+			s_fan.kind = 0;
 	}
 }
 
@@ -385,6 +564,10 @@ static int ZMus_OpenDevice( void )
 		return 0;
 	}
 
+	// For mixing a fanfare in; SDL asks for s_spec.samples frames at a time
+	s_mixFrames = max( (int)s_spec.samples, 4096 );
+	s_mixBuf = (Sint16 *)malloc( s_mixFrames * ZMUS_CHANNELS * sizeof( Sint16 ) );
+
 	SDL_PauseAudioDevice( s_device, 0 );
 	return 1;
 }
@@ -411,6 +594,12 @@ void ZMusic_Play( const char *track, float fadein, float volume, int loop )
 		return;
 	if ( !ZMus_OpenDevice() )
 		return;
+
+	// A name from resource/zl_music.txt: its file, and whether it loops unless told not to
+	int listLoop = loop;
+	track = ZMus_Resolve( track, &listLoop );
+	if ( loop )
+		loop = listLoop;
 
 	// Same track already playing: leave it alone (level transitions resend it)
 	if ( s_cur.kind && !stricmp( s_cur.name, track ) && s_cur.fadeTarget > 0 )
@@ -442,6 +631,34 @@ void ZMusic_Play( const char *track, float fadein, float volume, int loop )
 	}
 
 	ZMus_Swap( &t, fadein );
+}
+
+// Audio_PlayFanfare: once, over the music, which comes back after. Replaces a fanfare already
+// playing. Returns 0 if it couldn't be played.
+int ZMusic_Fanfare( const char *track )
+{
+	if ( !s_initialized || ( zmus_enable && !zmus_enable->value ) )
+		return 0;
+	if ( !ZMus_OpenDevice() )
+		return 0;
+
+	track = ZMus_Resolve( track, NULL );
+
+	zl_track_t t, old;
+	if ( !ZMus_Load( &t, track ) )
+		return 0;
+	t.loop = 0;
+	t.volume = 1.0f;
+	t.fade = t.fadeTarget = 1.0f;
+	t.fadeRate = 1.0f;
+
+	SDL_LockAudioDevice( s_device );
+	old = s_fan;
+	s_fan = t;
+	SDL_UnlockAudioDevice( s_device );
+
+	ZMus_FreeTrack( &old );
+	return 1;
 }
 
 void ZMusic_Stop( float fadeout )
@@ -483,6 +700,17 @@ void ZMusic_Frame( float time )
 	if ( zmus_enable && !zmus_enable->value && s_cur.kind )
 		ZMusic_Stop( 0 );
 
+	// A fanfare that ended: free it
+	if ( !s_fan.kind && ( s_fan.usf || s_fan.wav ) )
+	{
+		zl_track_t old;
+		SDL_LockAudioDevice( s_device );
+		old = s_fan;
+		memset( &s_fan, 0, sizeof( s_fan ) );
+		SDL_UnlockAudioDevice( s_device );
+		ZMus_FreeTrack( &old );
+	}
+
 	// Faded out: free it, start the queued one
 	if ( s_cur.kind && s_cur.fade <= 0.0001f && s_cur.fadeTarget <= 0 )
 	{
@@ -520,6 +748,36 @@ static void ZMus_Cmd_Play( void )
 	ZMusic_Play( gEngfuncs.Cmd_Argv( 1 ), fade, 1.0f, 1 );
 }
 
+static void ZMus_Cmd_Fanfare( void )
+{
+	if ( gEngfuncs.Cmd_Argc() < 2 )
+	{
+		gEngfuncs.Con_Printf( "zmus_fanfare <name or file>\n" );
+		return;
+	}
+	ZMusic_Fanfare( gEngfuncs.Cmd_Argv( 1 ) );
+}
+
+static void ZMus_Cmd_List( void )
+{
+	if ( !s_listLoaded )
+		ZMus_LoadList();
+	for ( int i = 0; i < s_listCount; i++ )
+	{
+		if ( s_list[i].loop < 0 )
+			gEngfuncs.Con_Printf( "%-28s = %s\n", s_list[i].name, s_list[i].file );
+		else
+			gEngfuncs.Con_Printf( "%-28s %s  %s\n", s_list[i].name, s_list[i].loop ? "loop" : "once", s_list[i].file );
+	}
+	gEngfuncs.Con_Printf( "%d tracks in resource/zl_music.txt\n", s_listCount );
+}
+
+static void ZMus_Cmd_Reload( void )
+{
+	ZMus_LoadList();
+	gEngfuncs.Con_Printf( "zmus: %d tracks\n", s_listCount );
+}
+
 static void ZMus_Cmd_Stop( void )
 {
 	float fade = gEngfuncs.Cmd_Argc() > 1 ? atof( gEngfuncs.Cmd_Argv( 1 ) ) : 0;
@@ -545,6 +803,8 @@ static void ZMus_Cmd_Info( void )
 			s_cur.loop ? "looping" : "once" );
 	else
 		gEngfuncs.Con_Printf( "zmus: nothing playing\n" );
+	if ( s_fan.kind )
+		gEngfuncs.Con_Printf( "zmus: fanfare %s %.1fs / %.1fs\n", s_fan.name, s_fan.playedSec, s_fan.lengthSec );
 }
 
 void ZMusic_Init( void )
@@ -556,6 +816,9 @@ void ZMusic_Init( void )
 	gEngfuncs.pfnAddCommand( "zmus_play", ZMus_Cmd_Play );
 	gEngfuncs.pfnAddCommand( "zmus_stop", ZMus_Cmd_Stop );
 	gEngfuncs.pfnAddCommand( "zmus_info", ZMus_Cmd_Info );
+	gEngfuncs.pfnAddCommand( "zmus_fanfare", ZMus_Cmd_Fanfare );
+	gEngfuncs.pfnAddCommand( "zmus_list", ZMus_Cmd_List );
+	gEngfuncs.pfnAddCommand( "zmus_reload", ZMus_Cmd_Reload );
 
 	memset( &s_cur, 0, sizeof( s_cur ) );
 	memset( &s_next, 0, sizeof( s_next ) );
@@ -570,6 +833,12 @@ void ZMusic_Shutdown( void )
 		s_device = 0;
 	}
 	ZMus_FreeTrack( &s_cur );
+	ZMus_FreeTrack( &s_fan );
+	if ( s_mixBuf )
+	{
+		free( s_mixBuf );
+		s_mixBuf = NULL;
+	}
 	if ( s_haveNext )
 		ZMus_FreeTrack( &s_next );
 	s_haveNext = 0;

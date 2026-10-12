@@ -52,9 +52,9 @@ clientdata_t none
 	DEFINE_DELTA( vuser2[1], DT_SIGNED | DT_FLOAT, 10, 1.0 ),
 	DEFINE_DELTA( vuser2[2], DT_SIGNED | DT_FLOAT, 10, 1.0 ),
 
-	DEFINE_DELTA( vuser3[0], DT_SIGNED | DT_FLOAT, 10, 1.0 ),
-	DEFINE_DELTA( vuser3[1], DT_SIGNED | DT_FLOAT, 10, 1.0 ),
-	DEFINE_DELTA( vuser3[2], DT_SIGNED | DT_FLOAT, 10, 1.0 ),
+	DEFINE_DELTA( vuser3[0], DT_SIGNED | DT_FLOAT, 22, 128.0 ),	// Zelda: speed Link wants on ice (PMZ_IceSlide)
+	DEFINE_DELTA( vuser3[1], DT_SIGNED | DT_FLOAT, 22, 128.0 ),	// Zelda: and its yaw
+	DEFINE_DELTA( vuser3[2], DT_SIGNED | DT_FLOAT, 24, 8.0 ),	// Zelda: height he last stood at (fallStartHeight)
 
 	DEFINE_DELTA( vuser4[0], DT_SIGNED | DT_FLOAT, 10, 1.0 ),
 	DEFINE_DELTA( vuser4[1], DT_SIGNED | DT_FLOAT, 10, 1.0 ),

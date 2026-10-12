@@ -94,6 +94,7 @@ HL1_OBJS = \
 	$(HL1_OBJ_DIR)/hud_servers.o \
 	$(HL1_OBJ_DIR)/zl_camera.o \
 	$(HL1_OBJ_DIR)/zl_draw.o \
+	$(HL1_OBJ_DIR)/zl_effects.o \
 	$(HL1_OBJ_DIR)/zl_hud.o \
 	$(HL1_OBJ_DIR)/zl_input.o \
 	$(HL1_OBJ_DIR)/zl_music.o \
@@ -276,3 +277,6 @@ $(ZL_EXT_OBJ_DIR)/%.o : $(ZL_EXT_DIR)/%.c
 clean:
 	-rm -rf $(HL1_OBJ_DIR)
 	-rm -f client.$(SHLIBEXT)
+
+# Zelda: header dependencies written by -MMD (linux/build_zelda.sh)
+-include $(shell find $(BUILD_OBJ_DIR) -name "*.d" 2>/dev/null)

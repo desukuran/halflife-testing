@@ -2,8 +2,10 @@
 *
 *	Zelda 64 port: music entities. The client plays the tracks (cl_dll/zl_music.cpp, lazyusf2).
 *
+*	Tracks are names from resource/zl_music.txt ("kokiri_forest"), or files under the mod folder.
+*
 *	ambient_zmusic
-*		track		file under the mod folder, e.g. "music/oot/kokiri_forest.miniusf"
+*		track		a name, or a file under the mod folder, e.g. "music/oot/06 Kokiri Forest.miniusf"
 *		fadein		seconds to fade in (0 = cut in)
 *		fadeout		seconds to fade out when stopped or replaced
 *		volume		0-10 (10 = full)
@@ -59,6 +61,13 @@ void ZL_MusicPlay( const char *track, float fadein, float volume, int loop )
 	g_flZMusicVolume = volume;
 	g_iZMusicLoop = loop;
 	ZL_SendMusic( NULL, ZMUS_PLAY, track, fadein, volume, loop );
+}
+
+// Audio_PlayFanfare: once over the music for everyone. Without the music files the client plays
+// fallbackSound (ZS_*, -1 for none) instead.
+void ZL_MusicFanfare( const char *track, int fallbackSound )
+{
+	ZL_SendMusic( NULL, ZMUS_FANFARE, track, 0, 1.0f, fallbackSound >= 0 ? fallbackSound : 255 );
 }
 
 void ZL_MusicStop( float fadeout )

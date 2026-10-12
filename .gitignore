@@ -35,3 +35,5 @@ __pycache__/
 
 # Link model sources made from your ROM (tools/zelda/make_link_model.py)
 tools/zelda/build/
+linux/release/game/
+linux/release/studiomdl

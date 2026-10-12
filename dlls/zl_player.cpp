@@ -31,6 +31,8 @@ cvar_t zl_hl_suit		= { "zl_hl_suit", "0", FCVAR_SERVER };		// also give the HEV 
 cvar_t zl_drops			= { "zl_drops", "1", FCVAR_SERVER };		// monsters drop rupees / hearts
 cvar_t zl_hookshot_any	= { "zl_hookshot_any", "1", FCVAR_SERVER };	// hookshot sticks to anything, not just wood
 cvar_t zl_start_items	= { "zl_start_items", "1", FCVAR_SERVER };	// 0 nothing, 1 sword + shield, 2 everything
+cvar_t zl_anim_debug	= { "zl_anim_debug", "0", FCVAR_SERVER };	// print each animation Link starts
+cvar_t zl_room_env		= { "zl_room_env", "0", FCVAR_SERVER };		// OoT room environmentType for Link's idle fidgets: 0 normal, 1 cold, 2 warm, 3 hot, 4-6 stretch
 
 BOOL ZL_Enabled( void )
 {
@@ -49,6 +51,8 @@ void ZL_RegisterCvars( void )
 	CVAR_REGISTER( &zl_drops );
 	CVAR_REGISTER( &zl_hookshot_any );
 	CVAR_REGISTER( &zl_start_items );
+	CVAR_REGISTER( &zl_room_env );
+	CVAR_REGISTER( &zl_anim_debug );
 }
 
 CLinkPlayer *ZL_GetLink( CBaseEntity *pEnt )
@@ -248,7 +252,11 @@ int CLinkPlayer::ZSwordDamage( int mwa )
 
 void CLinkPlayer::ZSetAction( int action )
 {
-	pev->iuser4 = ( pev->iuser4 & ~( ZL_STATE_ACTION_MASK | ZL_STATE_SUB_MASK | ZL_STATE_CHARGED ) ) | action;
+	// Knocked out of a spin charge: stop its hum (pm_zelda.c PMZ_ChargeSound)
+	if ( ZAction() == ZACT_SPIN_CHARGE && action != ZACT_SPIN_CHARGE )
+		STOP_SOUND( edict(), CHAN_ITEM, ZL_SoundPath( ZS_IT_SWORD_CHARGE ) );
+
+	pev->iuser4 = ( pev->iuser4 & ~( ZL_STATE_ACTION_MASK | ZL_STATE_SUB_MASK | ZL_STATE_CHARGED | ZL_STATE_RECOIL ) ) | action;
 	pev->fuser4 = 0;
 }
 
@@ -280,6 +288,14 @@ void CLinkPlayer::Spawn( void )
 	m_iZTargetSent = m_iZHoverSent = m_iZTargetFlagsSent = -1;
 	m_flZFallStartZ = pev->origin.z;
 	m_iZAnimState = -1;
+	m_iZLandAnim = 0;
+	m_iZLandNext = 0;
+	m_iZIdleAnim = 0;
+	m_iZIdleType = 0;
+	m_fZIdleRestart = FALSE;
+	m_flZIdleFrame = 0;
+	m_flZAirStart = pev->origin.z;
+	m_flZLastSpeed = 0;
 
 	if ( !ZL_Enabled() )
 	{
@@ -311,8 +327,11 @@ void CLinkPlayer::Spawn( void )
 	pev->iuser4 = 0;
 	pev->fuser1 = pev->angles.y;
 	pev->fuser4 = 0;
+	pev->vuser3.x = pev->vuser3.y = 0;	// the speed Link wants (PMZ_SpeedBegin): start from standing
+	pev->vuser3.z = pev->origin.z;		// fallStartHeight
 	m_flZTalkEndTime = -1.0f;
 	m_flZPutAwayStart = 0;
+	m_flZPutAwayReady = 0;
 	m_fZWorldFrozen = FALSE;
 
 	ZUpdateServerFlags();
@@ -355,7 +374,7 @@ void CLinkPlayer::ZUpdateServerFlags( void )
 		f |= ZSF_HASSWORD;
 	if ( m_ZInv.equipment & ( ZEQ_SHIELD_DEKU | ZEQ_SHIELD_HYLIAN | ZEQ_SHIELD_MIRROR ) )
 		f |= ZSF_HASSHIELD;
-	if ( m_iZMagic >= 12 )
+	if ( m_iZMagicCapacity > 0 && m_iZMagic >= ZL_SPIN_MAGIC )
 		f |= ZSF_MAGIC;
 	if ( m_fZSwordOut )
 		f |= ZSF_SWORDOUT;
@@ -434,6 +453,11 @@ void CLinkPlayer::PostThink( void )
 
 	if ( !IsAlive() || g_fGameOver )
 		return;
+
+	// CBasePlayer::PostThink only picks an animation standing, moving on the ground or in water:
+	// in the air (jumps, hops, falls) it's up to us
+	if ( !( pev->flags & FL_ONGROUND ) && pev->waterlevel <= 1 && ( pev->velocity.x || pev->velocity.y ) )
+		ZAnimate();
 
 	ZSwordThink();
 	ZItemThink();
@@ -821,7 +845,16 @@ void CLinkPlayer::ZUpdateDoAction( void )
 	if ( best == ZDO_NONE && ( m_iZPad & ZPAD_Z ) && ( pev->iuser3 & ZSF_HASSWORD ) )
 		m_iZDoAction = ZDO_ATTACK;	// jump attack
 	else if ( best == ZDO_NONE && m_fZSwordOut && !m_flZPutAwayStart && act == ZACT_STAND && pev->velocity.Length2D() < 20 )
-		m_iZDoAction = ZDO_PUTAWAY;	// standing still with the sword out (running, A still rolls)
+	{
+		// Standing still with the sword out (running, A still rolls). putAwayCooldownTimer: "Put
+		// Away" only comes up, and A only does it, once it's been on offer for 20 frames.
+		if ( !m_flZPutAwayReady )
+			m_flZPutAwayReady = gpGlobals->time;
+		if ( gpGlobals->time - m_flZPutAwayReady >= ZL_FRAMES( 20.0f ) )
+			m_iZDoAction = ZDO_PUTAWAY;
+		return;
+	}
+	m_flZPutAwayReady = 0;
 }
 
 void CLinkPlayer::ZDoActionPressed( void )
